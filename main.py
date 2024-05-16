@@ -11,7 +11,7 @@ def generate_pdf():
     
     for user in users:
         if user["email"] == selected_user:
-            pdf_path = "/Users/botondberde/pdf_filler_GC_Jonna/Hoja_Padronal - Las Palmas-1.pdf"  # Update with actual PDF path
+            pdf_path = "./pdf/Hoja_Padronal - Las Palmas-1.pdf"  # Update with actual PDF path
             fill_pdf(pdf_path, user)
             messagebox.showinfo("Success", "PDF generated successfully.")
             break
