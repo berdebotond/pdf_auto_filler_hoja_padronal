@@ -22,3 +22,11 @@ def fetch_data():
         return json.loads(data)
     else:
         print(f"Failed to fetch data: {response.json()}")
+
+def update_data(selected_user, data):
+
+    response = supabase_client.table('addresses').update(data).eq("id", selected_user.get('id')).execute()
+    if response:
+        print("Data updated successfully.")
+    else:
+        print(f"Failed to update data: {response.json()}")

@@ -39,7 +39,6 @@ def create_mock_data():
         'untitled105': fake.name(), 
         'untitled106': fake.ssn(), 
         'untitled107': str(random.randint(1, 10)), 
-        'untitled108': fake.word(), 
     }
     
     return data
@@ -56,29 +55,19 @@ def convert_to_db_schema(data):
         'surname': data['untitled12'],
         'first_name': data['untitled13'],
         'second_name': data['untitled14'],
-        'click_man': bool(int(data['untitled15'])),
-        'click_woman': bool(int(data['untitled16'])),
         'birth_date': data['untitled17'],
         'city_of_birth': data['untitled18'],
         'country_of_birth': data['untitled19'],
         'nationality': data['untitled20'],
-        'click_id_dni': bool(int(data['untitled21'])),
-        'click_id_passport': bool(int(data['untitled22'])),
-        'click_id_nie': bool(int(data['untitled23'])),
         'id_number': data['untitled24'],
         'study_level': data['untitled25'],
         'phone': data['untitled26'],
         'email': data['untitled27'],
-        'click_change_residency': bool(int(data['untitled28'])),
-        'click_omission': bool(int(data['untitled29'])),
-        'click_birth': bool(int(data['untitled30'])),
-        'click_change_address': bool(int(data['untitled31'])),
-        'click_change_pers_data': bool(int(data['untitled32'])),
         'prev_province_spain': data['untitled33'],
         'prev_country': data['untitled34'],
         'landlord_name': data['untitled105'],
         'landlord_id': data['untitled106'],
         'people_sum_involved': int(data['untitled107']),
-        'other_info': data['untitled108']
     }
+
     return db_data
