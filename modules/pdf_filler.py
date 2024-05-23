@@ -1,9 +1,11 @@
 import time
+import os
 import fitz  # PyMuPDF
+import sys
 
 def convert_to_pdf_form_data(db_data):
-    birtd_date = db_data['birth_date']
-    birtd_spanish_time_fomrat = str(time.strftime('%d/%m/%Y', time.strptime(birtd_date, '%Y-%m-%d')))
+    birth_date = db_data['birth_date']
+    birth_spanish_time_format = str(time.strftime('%d/%m/%Y', time.strptime(birth_date, '%Y-%m-%d')))
     pdf_data_for_filling = {
         'untitled1': db_data['street_type'],
         'untitled2': db_data['street_name'],
@@ -11,14 +13,13 @@ def convert_to_pdf_form_data(db_data):
         'untitled4': db_data['building_letter'],
         'untitled5': db_data['building_number'],
         'untitled6': db_data['building_portal'],
-        
         'untitled8': str(db_data['building_floor']),
         'untitled9': str(db_data['building_door_number']),
         'untitled10': True,
         'untitled12': db_data['surname'],
         'untitled13': db_data['first_name'],
         'untitled14': db_data['second_name'],
-        'untitled17': birtd_spanish_time_fomrat,
+        'untitled17': birth_spanish_time_format,
         'untitled18': db_data['city_of_birth'],
         'untitled19': db_data['country_of_birth'],
         'untitled20': db_data['nationality'],
@@ -40,7 +41,6 @@ def convert_to_pdf_form_data(db_data):
     elif db_data["id_documnet_type"] == "Passport":
         pdf_data_for_filling['untitled22'] = True
     # gender
-    print(db_data['gender'])
     if db_data['gender'] == 'Man':
         pdf_data_for_filling['untitled15'] = True
     else:
@@ -57,8 +57,13 @@ def convert_to_pdf_form_data(db_data):
     elif db_data['document_case_type'] == 'change personal data':
         pdf_data_for_filling['untitled32'] = True
     
-    print(pdf_data_for_filling)
     return pdf_data_for_filling
+
+def get_executable_dir():
+    """ Get the directory of the executable, if running as an executable """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 def fill_pdf(pdf_path, data):
     doc = fitz.open(pdf_path)
@@ -73,8 +78,10 @@ def fill_pdf(pdf_path, data):
                 widget.update()
             else:
                 print(f"Field {field_name} not found in PDF form.")
-                               
-    output_path = f"Hoja_Padronal_filled_{data['untitled12']}_{data['untitled13']}_{data['untitled2'].replace(' ', '_')}.pdf"
+    
+    output_dir = os.path.join(get_executable_dir(), 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"Hoja_Padronal_filled_{data['untitled12']}_{data['untitled13']}_{data['untitled2'].replace(' ', '_')}.pdf")
     doc.delete_page(1)
     doc.save(output_path)
     

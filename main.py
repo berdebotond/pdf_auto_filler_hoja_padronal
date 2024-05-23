@@ -3,7 +3,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from threading import Thread
 from modules.supabase_client import fetch_data, update_data, insert_data
-from modules.pdf_filler import fill_pdf
+from modules.pdf_filler import fill_pdf, get_executable_dir
+import os
+import sys
 
 # Global variables
 users = []
@@ -15,6 +17,16 @@ enum_values = {
     "document_case_type": ["change residency", "omission", "birth", "change address", "change personal data"]
 }
 
+def get_resource_path(relative_path):
+    """ Get the absolute path to a resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 def generate_pdf():
     selected_user = user_combobox.get()
     if not selected_user:
@@ -23,17 +35,23 @@ def generate_pdf():
     
     for user in users:
         if user["email"] == selected_user:
-            pdf_path = "./pdf/Hoja_Padronal - Las Palmas-1.pdf"  # Update with actual PDF path
-            fill_pdf(pdf_path, user)
-            messagebox.showinfo("Success", "PDF generated successfully.")
+            try:
+                pdf_path = get_resource_path(os.path.join("pdf", "Hoja_Padronal - Las Palmas-1.pdf"))  # Update with actual PDF path
+                fill_pdf(pdf_path, user)
+                messagebox.showinfo("Success", "PDF generated successfully.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to generate PDF: {e}")
             break
 
 def fetch_users():
     global users
-    db_data = fetch_data()
-    users = db_data.get("data", [])
-    update_combobox(users)
-    update_listbox(users)
+    try:
+        db_data = fetch_data()
+        users = db_data.get("data", [])
+        update_combobox(users)
+        update_listbox(users)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to fetch users: {e}")
 
 def fetch_users_thread():
     Thread(target=fetch_users).start()
@@ -82,9 +100,12 @@ def update_user():
         return
     
     updated_data = {key: entry.get() for key, entry in input_entries.items()}
-    update_data(selected_user_data, updated_data)
-    messagebox.showinfo("Success", "User data updated successfully.")
-    fetch_users_thread()
+    try:
+        update_data(selected_user_data, updated_data)
+        messagebox.showinfo("Success", "User data updated successfully.")
+        fetch_users_thread()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to update user: {e}")
 
 def sync_selection(event):
     selected_email = user_combobox.get()
@@ -101,9 +122,12 @@ def add_new_user():
         messagebox.showerror("Error", "Email is required to add a new user.")
         return
     
-    insert_data(new_user_data)
-    messagebox.showinfo("Success", "New user added successfully.")
-    fetch_users_thread()
+    try:
+        insert_data(new_user_data)
+        messagebox.showinfo("Success", "New user added successfully.")
+        fetch_users_thread()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to add new user: {e}")
 
 # Initialize the main window
 root = tk.Tk()
