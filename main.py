@@ -6,9 +6,11 @@ from modules.supabase_client import fetch_data, update_data, insert_data
 from modules.pdf_filler import fill_pdf, get_executable_dir
 import os
 import sys
+from tkinter.font import Font
 
 # Global variables
 users = []
+selected_users = []
 
 # Define the enum values
 enum_values = {
@@ -28,20 +30,24 @@ def get_resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def generate_pdf():
-    selected_user = user_combobox.get()
-    if not selected_user:
-        messagebox.showerror("Error", "No user selected.")
-        return
-    
-    for user in users:
-        if user["email"] == selected_user:
-            try:
-                pdf_path = get_resource_path(os.path.join("pdf", "Hoja_Padronal - Las Palmas-1.pdf"))  # Update with actual PDF path
-                fill_pdf(pdf_path, user)
-                messagebox.showinfo("Success", "PDF generated successfully.")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to generate PDF: {e}")
-            break
+    if selected_users:
+        user_data = selected_users[0]
+    else:
+        selected_user = user_combobox.get()
+        if not selected_user:
+            messagebox.showerror("Error", "No user selected.")
+            return
+        user_data = next((user for user in users if user["email"] == selected_user), None)
+        if not user_data:
+            messagebox.showerror("Error", "Selected user not found.")
+            return
+
+    try:
+        pdf_path = get_resource_path(os.path.join("pdf", "Hoja_Padronal - Las Palmas-1.pdf"))  # Update with actual PDF path
+        fill_pdf(pdf_path, user_data)
+        messagebox.showinfo("Success", "PDF generated successfully.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate PDF: {e}")
 
 def fetch_users():
     global users
@@ -129,10 +135,49 @@ def add_new_user():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to add new user: {e}")
 
+def add_user_to_list():
+    selected_user = user_combobox.get()
+    if not selected_user:
+        messagebox.showerror("Error", "No user selected.")
+        return
+    if len(selected_users) >= 4:
+        messagebox.showerror("Error", "Maximum of 4 users can be added.")
+        return
+    
+    user_data = next((user for user in users if user["email"] == selected_user), None)
+    if not user_data:
+        messagebox.showerror("Error", "Selected user not found.")
+        return
+    
+    if user_data in selected_users:
+        messagebox.showinfo("Info", "User is already in the list.")
+        return
+    
+    selected_users.append(user_data)
+    update_selected_users_listbox()
+
+def remove_user_from_list():
+    selected_user = selected_users_listbox.get(tk.ACTIVE)
+    if not selected_user:
+        return
+    
+    user_data = next((user for user in selected_users if user["email"] == selected_user), None)
+    if user_data:
+        selected_users.remove(user_data)
+        update_selected_users_listbox()
+
+def update_selected_users_listbox():
+    selected_users_listbox.delete(0, tk.END)
+    for user in selected_users:
+        selected_users_listbox.insert(tk.END, user["email"])
+
 # Initialize the main window
 root = tk.Tk()
 root.title("PDF Generator & User Data Updater")
-root.geometry("600x700")
+root.geometry("600x800")
+
+# Define custom fonts for icons
+icon_font = Font(family='Helvetica', size=12, weight='bold')
 
 # Create and place widgets
 ttk.Label(root, text="Select User:").grid(column=0, row=0, padx=10, pady=10, sticky="w")
@@ -154,9 +199,28 @@ search_entry = ttk.Entry(root)
 search_entry.grid(column=1, row=2, padx=10, pady=10, sticky="ew")
 search_entry.bind("<KeyRelease>", search_users)
 
-search_results_listbox = tk.Listbox(root)
-search_results_listbox.grid(column=1, row=3, padx=10, pady=10, columnspan=2, sticky="nsew")
+# Frame for search results and selected users
+results_frame = ttk.Frame(root)
+results_frame.grid(column=0, row=3, columnspan=3, padx=10, pady=10, sticky="nsew")
+
+search_results_listbox = tk.Listbox(results_frame, height=10,)
+search_results_listbox.grid(column=0, row=0, padx=10, pady=10, sticky="nsew")
 search_results_listbox.bind("<<ListboxSelect>>", select_user)
+
+# Selected users section
+ttk.Label(results_frame, text="Selected users for generation:").grid(column=1, row=1, padx=10, pady=10, sticky="w")
+
+selected_users_frame = ttk.Frame(results_frame)
+selected_users_frame.grid(column=0, row=2, padx=10, pady=10, sticky="ew")
+
+selected_users_listbox = tk.Listbox(selected_users_frame, height=4 )
+selected_users_listbox.grid(column=0, row=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+
+add_to_list_button = ttk.Button(selected_users_frame, text="+", command=add_user_to_list, width=2)
+add_to_list_button.grid(column=0, row=1, padx=10, pady=10, sticky="ew")
+
+remove_from_list_button = ttk.Button(selected_users_frame, text="-", command=remove_user_from_list, width=2)
+remove_from_list_button.grid(column=1, row=1, padx=10, pady=10, sticky="ew")
 
 # Create a canvas and a scrollbar for the input fields
 canvas = tk.Canvas(root)
@@ -180,8 +244,8 @@ def _on_mouse_wheel(event):
 canvas.bind_all("<MouseWheel>", _on_mouse_wheel)
 
 # Place the canvas and scrollbar on the main window
-canvas.grid(column=0, row=4, columnspan=3, padx=10, pady=10, sticky="nsew")
-scrollbar.grid(column=3, row=4, sticky="ns")
+canvas.grid(column=0, row=5, columnspan=3, padx=10, pady=10, sticky="nsew")
+scrollbar.grid(column=3, row=5, sticky="ns")
 
 # Create input fields dynamically based on the database keys (excluding 'id')
 input_entries = {}
@@ -202,7 +266,7 @@ for key in user_sample.keys():
         row += 1
 
 # Make the grid expand to fill the available space
-root.grid_rowconfigure(4, weight=1)
+root.grid_rowconfigure(5, weight=1)
 root.grid_columnconfigure(1, weight=1)
 
 # Fetch users data automatically when the application starts
