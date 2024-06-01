@@ -29,6 +29,11 @@ def get_resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+def load_pdfs():
+    pdf_dir = get_resource_path("pdf")
+    pdf_files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
+    return pdf_files
+
 def generate_pdf():
     if selected_users:
         user_data = selected_users[0]
@@ -49,9 +54,14 @@ def generate_pdf():
             messagebox.showerror("Error", "Selected user not found.")
             return
 
+    pdf_name = pdf_combobox.get()
+    if not pdf_name:
+        messagebox.showerror("Error", "No PDF file selected.")
+        return
+    
+    pdf_path = get_resource_path(os.path.join("pdf", pdf_name))
+
     try:
-        print(f"Additional {additional}")
-        pdf_path = get_resource_path(os.path.join("pdf", "Hoja_Padronal_Renamed.pdf"))  # Update with actual PDF path
         fill_pdf(pdf_path, user_data, additional)
         messagebox.showinfo("Success", f"PDF generated successfully for {user_data}.")
     except Exception as e:
@@ -105,7 +115,6 @@ def populate_fields(user):
         else:
             entry.delete(0, tk.END)
             entry.insert(0, str(value))  # Ensure the value is a string
-
 
 def update_user():
     selected_user = user_combobox.get().split(' - ')[-1]
@@ -182,6 +191,7 @@ def remove_user_from_list():
         selected_users.remove(user_data)
         update_selected_users_listbox()
 
+
 def update_selected_users_listbox():
     selected_users_listbox.delete(0, tk.END)
     for user in selected_users:
@@ -219,23 +229,28 @@ user_combobox = ttk.Combobox(root, state="readonly")
 user_combobox.grid(column=1, row=0, padx=10, pady=10, columnspan=2, sticky="ew")
 user_combobox.bind("<<ComboboxSelected>>", sync_selection)
 
+ttk.Label(root, text="Select PDF File:").grid(column=0, row=1, padx=10, pady=10, sticky="w")
+pdf_combobox = ttk.Combobox(root, state="readonly")
+pdf_combobox.grid(column=1, row=1, padx=10, pady=10, columnspan=2, sticky="ew")
+pdf_combobox['values'] = load_pdfs()
+
 generate_button = ttk.Button(root, text="Generate PDF", command=generate_pdf)
-generate_button.grid(column=1, row=1, padx=10, pady=10, sticky="ew")
+generate_button.grid(column=1, row=2, padx=10, pady=10, sticky="ew")
 
 update_button = ttk.Button(root, text="Update User", command=update_user)
-update_button.grid(column=2, row=1, padx=10, pady=10, sticky="ew")
+update_button.grid(column=2, row=2, padx=10, pady=10, sticky="ew")
 
 add_button = ttk.Button(root, text="Add New User", command=add_new_user)
-add_button.grid(column=0, row=1, padx=10, pady=10, sticky="ew")
+add_button.grid(column=0, row=2, padx=10, pady=10, sticky="ew")
 
-ttk.Label(root, text="Search:").grid(column=0, row=2, padx=10, pady=10, sticky="w")
+ttk.Label(root, text="Search:").grid(column=0, row=3, padx=10, pady=10, sticky="w")
 search_entry = ttk.Entry(root)
-search_entry.grid(column=1, row=2, padx=10, pady=10, columnspan=2, sticky="ew")
+search_entry.grid(column=1, row=3, padx=10, pady=10, columnspan=2, sticky="ew")
 search_entry.bind("<KeyRelease>", search_users)
 
 # Frame for search results and selected users
 results_frame = ttk.Frame(root)
-results_frame.grid(column=0, row=3, columnspan=3, padx=10, pady=10, sticky="nsew")
+results_frame.grid(column=0, row=4, columnspan=3, padx=10, pady=10, sticky="nsew")
 
 search_results_listbox = tk.Listbox(results_frame, height=10, width=80)
 search_results_listbox.grid(column=0, row=0, padx=10, pady=10, sticky="nsew")
@@ -257,7 +272,7 @@ remove_from_list_button = ttk.Button(selected_users_frame, text="-", command=rem
 remove_from_list_button.grid(column=1, row=1, padx=10, pady=10, sticky="ew")
 
 remove_user_button = ttk.Button(root, text="Remove User", command=remove_user)
-remove_user_button.grid(column=0, row=2, padx=10, pady=10, sticky="ew")
+remove_user_button.grid(column=0, row=3, padx=10, pady=10, sticky="ew")
 
 # Create a canvas and a scrollbar for the input fields
 canvas = tk.Canvas(root)
