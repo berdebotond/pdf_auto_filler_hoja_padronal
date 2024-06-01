@@ -30,3 +30,10 @@ def update_data(selected_user, data):
         print("Data updated successfully.")
     else:
         print(f"Failed to update data: {response.json()}")
+
+def remove_data(user_id):
+    response = supabase_client.table('addresses').delete().eq("id", user_id).execute()
+    if response:
+        print("Data removed successfully.")
+    else:
+        print(f"Failed to remove data: {response.json()}")
