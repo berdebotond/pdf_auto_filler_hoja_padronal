@@ -37,23 +37,20 @@ def load_pdfs():
 def generate_pdf():
     if selected_users:
         user_data = selected_users[0]
-        if len(selected_users) > 1:
-            del selected_users[0]
-            additional = selected_users
-        else:
-            additional = None 
+        additional = selected_users[1:] if len(selected_users) > 1 else None
     else:
-        additional = None
         selected_user = user_combobox.get()
         if not selected_user:
             messagebox.showerror("Error", "No user selected.")
             return
+        
         selected_email = selected_user.split(' - ')[-1]
         user_data = next((user for user in users if user["email"] == selected_email), None)
         if not user_data:
             messagebox.showerror("Error", "Selected user not found.")
             return
-
+        additional = None
+    
     pdf_name = pdf_combobox.get()
     if not pdf_name:
         messagebox.showerror("Error", "No PDF file selected.")
@@ -63,9 +60,10 @@ def generate_pdf():
 
     try:
         fill_pdf(pdf_path, user_data, additional)
-        messagebox.showinfo("Success", f"PDF generated successfully for {user_data}.")
+        messagebox.showinfo("Success", f"PDF generated successfully for {user_data['surname']} {user_data['first_name']}.")
     except Exception as e:
         messagebox.showerror("Error", f"Failed to generate PDF: {e}")
+
 
 def fetch_users():
     global users
