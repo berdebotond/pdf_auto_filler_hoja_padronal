@@ -1,8 +1,9 @@
 import json
 import tkinter as tk
+import traceback
 from tkinter import ttk, messagebox
 from threading import Thread
-from modules.supabase_client import fetch_data, update_data, insert_data, remove_data
+from modules.supabase_client import update_data, fetch_data_nie_tie_initial, insert_data, remove_user_from_db
 from modules.pdf_filler import fill_pdf, get_executable_dir
 import os
 import sys
@@ -19,6 +20,7 @@ enum_values = {
     "document_case_type": ["change residency", "omission", "birth", "change address", "change personal data"]
 }
 
+
 def get_resource_path(relative_path):
     """ Get the absolute path to a resource, works for dev and for PyInstaller """
     try:
@@ -29,10 +31,12 @@ def get_resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+
 def load_pdfs():
     pdf_dir = get_resource_path("pdf")
     pdf_files = [f for f in os.listdir(pdf_dir) if f.endswith('.pdf')]
     return pdf_files
+
 
 def generate_pdf():
     if selected_users:
@@ -43,65 +47,75 @@ def generate_pdf():
         if not selected_user:
             messagebox.showerror("Error", "No user selected.")
             return
-        
-        selected_email = selected_user.split(' - ')[-1]
-        user_data = next((user for user in users if user["email"] == selected_email), None)
+
+        selected_id = selected_user.split(' - ')[-1]
+        user_data = next((user for user in users if str(user.get('id')) == selected_id), None)
         if not user_data:
             messagebox.showerror("Error", "Selected user not found.")
             return
         additional = None
-    
+
     pdf_name = pdf_combobox.get()
     if not pdf_name:
         messagebox.showerror("Error", "No PDF file selected.")
         return
-    
+
     pdf_path = get_resource_path(os.path.join("pdf", pdf_name))
 
     try:
         fill_pdf(pdf_path, user_data, additional)
-        messagebox.showinfo("Success", f"PDF generated successfully for {user_data['surname']} {user_data['first_name']}.")
+        messagebox.showinfo("Success",
+                            f"PDF generated successfully for {user_data['surname']} {user_data['name']}.")
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to generate PDF: {e}")
+        messagebox.showerror("Error", f"Failed to generate PDF: {traceback.format_exc(e)}")
 
 
 def fetch_users():
     global users
     try:
-        db_data = fetch_data()
-        users = db_data.get("data", [])
+        db_data = fetch_data_nie_tie_initial()
+        users = db_data
         update_combobox(users)
         update_listbox(users)
     except Exception as e:
         messagebox.showerror("Error", f"Failed to fetch users: {e}")
 
+
 def fetch_users_thread():
     Thread(target=fetch_users).start()
 
+
 def update_combobox(users):
-    user_details = [f'{user["surname"]} {user["first_name"]} - {user["email"]}' for user in users]
+    user_details = [f'{user["surname"]} {user["name"]} - {user["id"]}' for user in users]
     user_combobox['values'] = user_details
+
 
 def search_users(event):
     query = search_entry.get().lower()
-    filtered_users = [user for user in users if query in user["email"].lower() or query in user["surname"].lower() or query in user["first_name"].lower()]
+    filtered_users = [user for user in users if
+                      query in (user.get("email", "").lower() or query in user.get("surname",
+                                                                                   "").lower() or query in user.get(
+                          "name", "").lower())]
     update_listbox(filtered_users)
+
 
 def update_listbox(filtered_users):
     search_results_listbox.delete(0, tk.END)
     for user in filtered_users:
-        search_results_listbox.insert(tk.END, f'{user["surname"]} {user["first_name"]} - {user["email"]}')
+        search_results_listbox.insert(tk.END, f'{user["surname"]} {user["name"]} - {user["id"]}')
+
 
 def select_user(event):
     if not search_results_listbox.curselection():
         return
     selected_text = search_results_listbox.get(search_results_listbox.curselection())
-    selected_email = selected_text.split(' - ')[-1]
+    selected_id = selected_text.split(' - ')[-1]
     user_combobox.set(selected_text)
     for user in users:
-        if user["email"] == selected_email:
+        if str(user["id"]) == selected_id:
             populate_fields(user)
             break
+
 
 def populate_fields(user):
     for key, entry in input_entries.items():
@@ -114,41 +128,54 @@ def populate_fields(user):
             entry.delete(0, tk.END)
             entry.insert(0, str(value))  # Ensure the value is a string
 
+
 def update_user():
     selected_user = user_combobox.get().split(' - ')[-1]
     if not selected_user:
         messagebox.showerror("Error", "No user selected.")
         return
-    
-    selected_user_data = next((user for user in users if user["email"] == selected_user), None)
+
+    selected_user_data = next((user for user in users if str(user["id"]) == selected_user), None)
     if not selected_user_data:
         messagebox.showerror("Error", "User not found.")
         return
-    
+
     updated_data = {key: entry.get() for key, entry in input_entries.items()}
+    required_fields = ["name", "surname"]
+
+    missing_fields = [field for field in required_fields if not updated_data.get(field)]
+    if missing_fields:
+        messagebox.showerror("Error", f"Missing required fields: {', '.join(missing_fields)}")
+        return
+
     try:
-        update_data(selected_user_data, updated_data)
+        update_data(selected_user_data['id'], updated_data)
         messagebox.showinfo("Success", "User data updated successfully.")
         fetch_users_thread()
     except Exception as e:
         messagebox.showerror("Error", f"Failed to update user: {e}")
 
+
 def sync_selection(event):
     selected_text = user_combobox.get()
-    selected_email = selected_text.split(' - ')[-1]
+    selected_id = selected_text.split(' - ')[-1]
     for idx, user in enumerate(users):
-        if user["email"] == selected_email:
+        if str(user["id"]) == selected_id:
             search_results_listbox.selection_clear(0, tk.END)
             search_results_listbox.selection_set(idx)
             populate_fields(user)
             break
 
+
 def add_new_user():
     new_user_data = {key: entry.get() for key, entry in input_entries.items()}
-    if not new_user_data["email"]:
-        messagebox.showerror("Error", "Email is required to add a new user.")
+    required_fields = ["name", "surname", "email"]
+
+    missing_fields = [field for field in required_fields if not new_user_data.get(field)]
+    if missing_fields:
+        messagebox.showerror("Error", f"Missing required fields: {', '.join(missing_fields)}")
         return
-    
+
     try:
         insert_data(new_user_data)
         messagebox.showinfo("Success", "New user added successfully.")
@@ -156,35 +183,37 @@ def add_new_user():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to add new user: {e}")
 
+
 def add_user_to_list():
     selected_text = user_combobox.get()
-    selected_email = selected_text.split(' - ')[-1]
-    if not selected_email:
+    selected_id = selected_text.split(' - ')[-1]
+    if not selected_id:
         messagebox.showerror("Error", "No user selected.")
         return
     if len(selected_users) >= 4:
         messagebox.showerror("Error", "Maximum of 4 users can be added.")
         return
-    
-    user_data = next((user for user in users if user["email"] == selected_email), None)
+
+    user_data = next((user for user in users if str(user["id"]) == selected_id), None)
     if not user_data:
         messagebox.showerror("Error", "Selected user not found.")
         return
-    
+
     if user_data in selected_users:
         messagebox.showinfo("Info", "User is already in the list.")
         return
-    
+
     selected_users.append(user_data)
     update_selected_users_listbox()
+
 
 def remove_user_from_list():
     if not selected_users_listbox.curselection():
         return
     selected_text = selected_users_listbox.get(selected_users_listbox.curselection())
-    selected_email = selected_text.split(' - ')[-1]
-    
-    user_data = next((user for user in selected_users if user["email"] == selected_email), None)
+    selected_id = selected_text.split(' - ')[-1]
+
+    user_data = next((user for user in selected_users if str(user["id"]) == selected_id), None)
     if user_data:
         selected_users.remove(user_data)
         update_selected_users_listbox()
@@ -193,25 +222,27 @@ def remove_user_from_list():
 def update_selected_users_listbox():
     selected_users_listbox.delete(0, tk.END)
     for user in selected_users:
-        selected_users_listbox.insert(tk.END, f'{user["surname"]} {user["first_name"]} - {user["email"]}')
+        selected_users_listbox.insert(tk.END, f'{user["surname"]} {user["name"]}')
+
 
 def remove_user():
     selected_user = user_combobox.get().split(' - ')[-1]
     if not selected_user:
         messagebox.showerror("Error", "No user selected.")
         return
-    
-    selected_user_data = next((user for user in users if user["email"] == selected_user), None)
+
+    selected_user_data = next((user for user in users if str(user["id"]) == selected_user), None)
     if not selected_user_data:
         messagebox.showerror("Error", "User not found.")
         return
-    
+
     try:
-        remove_data(selected_user_data['id'])
+        remove_user_from_db(selected_user_data['id'])
         messagebox.showinfo("Success", "User removed successfully.")
         fetch_users_thread()
     except Exception as e:
         messagebox.showerror("Error", f"Failed to remove user: {e}")
+
 
 # Initialize the main window
 root = tk.Tk()
@@ -287,9 +318,11 @@ scrollable_frame.bind(
 canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 canvas.configure(yscrollcommand=scrollbar.set)
 
+
 # Add mouse scrolling functionality
 def _on_mouse_wheel(event):
     canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
 
 canvas.bind_all("<MouseWheel>", _on_mouse_wheel)
 
@@ -299,18 +332,18 @@ scrollbar.grid(column=3, row=5, sticky="ns")
 
 # Create input fields dynamically based on the database keys (excluding 'id')
 input_entries = {}
-user_sample = fetch_data().get("data", [{}])[0]
+user_sample = fetch_data_nie_tie_initial()[0]  # This fetches the sample user data after merging tables
 
 row = 0
 for key in user_sample.keys():
     if key != 'id':
         ttk.Label(scrollable_frame, text=f"{key}:").grid(column=0, row=row, padx=10, pady=5, sticky=tk.W)
-        
+
         if key in enum_values:
             entry = ttk.Combobox(scrollable_frame, values=enum_values[key], state="readonly")
         else:
             entry = ttk.Entry(scrollable_frame)
-        
+
         entry.grid(column=1, row=row, padx=10, pady=5, sticky="ew")
         input_entries[key] = entry
         row += 1
