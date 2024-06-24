@@ -6,6 +6,27 @@ import fitz  # PyMuPDF
 import sys
 
 
+def check_street(spain_address):
+    street_type = spain_address
+    address = spain_address
+    if "calle" in street_type.lower():
+        street_type = "Calle (street)"
+        address = address.lower().replace("calle", "")
+    elif "avenida" in street_type.lower():
+        street_type = "Avenida (avenue)"
+        address = address.lower().replace("avenida", "")
+    elif "plaza" in street_type.lower():
+        street_type = "Plaza (plaza)"
+        address = address.lower().replace("plaza", "")
+    elif "carretera" in street_type.lower():
+        street_type = "Carretera (road)"
+        address = address.lower().replace("carretera", "")
+    elif "paseo" in street_type.lower():
+        street_type = "Paseo (promenade)"
+        address = address.lower().replace("paseo", "")
+
+    return street_type, address
+
 def pdf_filler_11(data_to_fill, additional_users):
     # Function to fill data for 11-Formulario_larga_duracixn.pdf
     data = {}
@@ -348,6 +369,30 @@ def pdf_filler_NIE_TIE(data_to_fill, additional_users):
     return data, []
 
 
+def pdf_filler_empadronamiento(data_to_fill, additional_users):
+    # Function to fill data for Empadronamiento Form - gottalovespain.pdf
+    street_type, address = check_street(data_to_fill.get('spain_address', ''))
+
+    data = {
+        'Text1': address,
+        'Choice2': street_type,
+        "id": data_to_fill.get("id", ""),
+        'Text3': data_to_fill.get('zip_code', ''),
+        'Text4': data_to_fill.get('province', ''),
+        'Text6': data_to_fill.get('apt_number', ''),
+        'Text89': data_to_fill.get('name', ''),
+        'Text92': data_to_fill.get('surname', ''),
+        'Text94': data_to_fill.get('nie', ''),
+        'Text95': data_to_fill.get('city_of_birth', ''),
+        'Text96': data_to_fill.get('country_of_birth', ''),
+
+
+    }
+
+    print(data_to_fill.get("id", ""))
+    return data, []
+
+
 pdf_filler_docs_es_ext = {
     "11-Formulario_larga_duracixn.pdf": pdf_filler_11,
     "15-Formulario_NIE_y_certificados.pdf": pdf_filler_15,
@@ -357,6 +402,7 @@ pdf_filler_docs_es_ext = {
     "23-Formulario_TIE_RU.pdf": pdf_filler_23,
     "Hoja_Padronal.pdf": pdf_filler_hoja_padronal,
     "Data Sheet for NIE_TIE - gottalovespain.pdf": pdf_filler_NIE_TIE,
+    "Empadronamiento Form - gottalovespain.pdf": pdf_filler_empadronamiento
 }
 
 
@@ -465,7 +511,7 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
         for widget in page.widgets():
-            if "Hoja" not in pdf_path:
+            if "Hoja" not in pdf_path and "Empadronamiento" not in pdf_path:
                 widget.field_name = f"field_{field_index}"
             field_index += 1
             widget.update()
@@ -496,11 +542,12 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
         rect = fitz.Rect(10, 10, 100, 30)  # Define a specific location for easier retrieval
         # Add free text annotation with a white color to make it effectively invisible
         page.add_freetext_annot(rect, id_text, fontsize=12)
-
+    else:
+        if len(doc) > 1:
+            doc.delete_page(1)
     output_path = os.path.join(output_dir,
-                               f"Filled_{pdf_name}_{str(uuid.uuid4())}.pdf")
-    if len(doc) > 1:
-        doc.delete_page(1)
+                               f"Filled_{pdf_name.replace('.pdf', '')}_{str(uuid.uuid4())}.pdf")
+
     doc.save(output_path)
 
     print(f"document saved to {output_path} with id {read_pdf_custom_id(output_path)}")
