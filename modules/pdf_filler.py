@@ -1,45 +1,64 @@
 import time
 import os
 import uuid
-
 import fitz  # PyMuPDF
 import sys
 
 
 def check_street(spain_address):
-    street_type = spain_address
-    address = spain_address
-    if "calle" in street_type.lower():
-        street_type = "Calle (street)"
-        address = address.lower().replace("calle", "")
-    elif "avenida" in street_type.lower():
-        street_type = "Avenida (avenue)"
-        address = address.lower().replace("avenida", "")
-    elif "plaza" in street_type.lower():
-        street_type = "Plaza (plaza)"
-        address = address.lower().replace("plaza", "")
-    elif "carretera" in street_type.lower():
-        street_type = "Carretera (road)"
-        address = address.lower().replace("carretera", "")
-    elif "paseo" in street_type.lower():
-        street_type = "Paseo (promenade)"
-        address = address.lower().replace("paseo", "")
+    street_map = {
+        "calle": "Calle (street)",
+        "avenida": "Avenida (avenue)",
+        "plaza": "Plaza (plaza)",
+        "carretera": "Carretera (road)",
+        "paseo": "Paseo (promenade)"
+    }
+    for key, value in street_map.items():
+        if key in spain_address.lower():
+            return value, spain_address.lower().replace(key, "")
+    return spain_address, spain_address
 
-    return street_type, address
 
-def pdf_filler_11(data_to_fill, additional_users):
-    # Function to fill data for 11-Formulario_larga_duracixn.pdf
-    data = {}
+def fill_common_fields(data_to_fill):
     nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    print(data_to_fill)
     surnames = data_to_fill.get('surname', '   ').split(" ")
     birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    if data_to_fill["gender"] == "female":
-        data['field_8'] = True
-    else:
-        data['field_7'] = True
 
-    # Family status
+    data = {
+        'field_0': data_to_fill.get('passport_number', ''),
+        'field_1': nie_numbers[0] if len(nie_numbers) > 0 else '',
+        'field_2': nie_numbers[1] if len(nie_numbers) > 1 else '',
+        'field_3': nie_numbers[2] if len(nie_numbers) > 2 else '',
+        'field_4': surnames[1] if len(surnames) > 1 else '',
+        'field_5': data_to_fill.get('name', ''),
+        'field_9': birth_dates[0] if len(birth_dates) > 0 else '',
+        'field_57': birth_dates[1] if len(birth_dates) > 1 else '',
+        'field_10': birth_dates[2] if len(birth_dates) > 2 else '',
+        'field_12': data_to_fill.get('city_of_birth', ''),
+        'field_11': data_to_fill.get('country_of_birth', ''),
+        'field_13': data_to_fill.get('nationality', ''),
+        'field_19': data_to_fill.get('full_name_of_father', ''),
+        'field_20': data_to_fill.get('full_name_of_mother', ''),
+        'field_22': data_to_fill.get('spain_address', ''),
+        'field_23': data_to_fill.get('house_name', ''),
+        'field_24': data_to_fill.get('apt_number', ''),
+        'field_25': data_to_fill.get('city', ''),
+        'field_26': data_to_fill.get('zip_code', ''),
+        'field_27': data_to_fill.get('province', ''),
+        'field_28': data_to_fill.get('mobile_phone', ''),
+        'field_29': data_to_fill.get('email', ''),
+        'field_30': data_to_fill.get('legal_representative_name', ''),
+        'field_31': data_to_fill.get('legal_representative_id', ''),
+        'field_32': data_to_fill.get('legal_representative_relation', '')
+    }
+
+    if len(surnames) > 0:
+        data['field_21'] = surnames[0]
+
+    return data
+
+
+def fill_family_status(data_to_fill):
     family_status_map = {
         "single": 'field_14',
         "married": 'field_15',
@@ -47,332 +66,73 @@ def pdf_filler_11(data_to_fill, additional_users):
         "divorced": 'field_17',
         "separated": 'field_18'
     }
-    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
-    family_status_field = family_status_map.get(data_to_fill["family_status"])
-    if family_status_field:
-        data[family_status_field] = True
-
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_21'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_4'] = surnames[1]
-    data['field_5'] = data_to_fill.get('name', '')
-    data['field_58'] = birth_dates[0]
-    data['field_57'] = birth_dates[1]
-    data['field_10'] = birth_dates[2]
-    data['field_11'] = data_to_fill.get('city_of_birth', '')
-    data['field_12'] = data_to_fill.get('country_of_birth', '')
-    data['field_13'] = data_to_fill.get('nationality', '')
-    data['field_19'] = data_to_fill.get('full_name_of_father', '')
-    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_31'] = data_to_fill.get('legal_representative_id', '')
-    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
-    print(data)
+    checkboxes = list(family_status_map.values()) + ["field_8", "field_7"]
+    data = {family_status_map[data_to_fill["family_status"]]: True} if data_to_fill[
+                                                                           "family_status"] in family_status_map else {}
 
     return data, checkboxes
+
+
+def fill_gender(data_to_fill):
+    return {'field_8': True} if data_to_fill["gender"] == "female" else {'field_7': True}
+
+
+def pdf_filler_template(data_to_fill, additional_users, form_specific_fields=None):
+    data = fill_common_fields(data_to_fill)
+    family_status_data, checkboxes = fill_family_status(data_to_fill)
+    gender_data = fill_gender(data_to_fill)
+
+    data.update(family_status_data)
+    data.update(gender_data)
+
+    if form_specific_fields:
+        data.update(form_specific_fields(data_to_fill))
+
+    return data, checkboxes
+
+
+def pdf_filler_11(data_to_fill, additional_users):
+    return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_15(data_to_fill, additional_users):
-    # Function to fill data for 15-Formulario_NIE_y_certificados.pdf
-    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
-    data = {}
-    checkboxes = ["field_9", "field_8", "field_15", "field_16", "field_17", "field_18", "field_19"]
-
-    if data_to_fill["gender"] == "female":
-        data['field_9'] = True
-    else:
-        data['field_8'] = False
-    if data_to_fill["family_status"] == "single":
-        data['field_15'] = True
-
-    elif data_to_fill["family_status"] == "married":
-        data['field_16'] = True
-
-    elif data_to_fill["family_status"] == "widowed":
-        data['field_17'] = True
-
-    elif data_to_fill["family_status"] == "divorced":
-        data['field_18'] = True
-
-    elif data_to_fill["family_status"] == "separated":
-        data['field_19'] = True
-
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_4'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_5'] = surnames[1]
-    data['field_6'] = data_to_fill.get('name', '')
-    data['field_10'] = birth_dates[0]
-    data['field_57'] = birth_dates[1]
-    data['field_11'] = birth_dates[2]
-    data['field_12'] = data_to_fill.get('city_of_birth', '')
-    data['field_13'] = data_to_fill.get('country_of_birth', '')
-    data['field_14'] = data_to_fill.get('nationality', '')
-    data['field_20'] = data_to_fill.get('full_name_of_father', '')
-    data['field_21'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_35'] = data_to_fill.get('legal_representative_id', '')
-    data['field_31'] = data_to_fill.get('legal_representative_relation', '')
-    return data, checkboxes
+    return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_17(data_to_fill, additional_users):
-    # Function to fill data for 17-Formulario_TIE.pdf
-    data = {}
-    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
-
-    if data_to_fill["gender"] == "female":
-        data['field_8'] = True
-    else:
-        data['field_7'] = False
-    if data_to_fill["family_status"] == "single":
-        data['field_14'] = True
-    elif data_to_fill["family_status"] == "married":
-        data['field_15'] = True
-    elif data_to_fill["family_status"] == "widowed":
-        data['field_16'] = True
-    elif data_to_fill["family_status"] == "divorced":
-        data['field_17'] = True
-    elif data_to_fill["family_status"] == "separated":
-        data['field_18'] = True
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_21'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_4'] = surnames[1]
-    data['field_5'] = data_to_fill.get('name', '')
-    data['field_9'] = birth_dates[0]
-    data['field_57'] = birth_dates[1]
-    data['field_10'] = birth_dates[2]
-    data['field_12'] = data_to_fill.get('city_of_birth', '')
-    data['field_11'] = data_to_fill.get('country_of_birth', '')
-    data['field_13'] = data_to_fill.get('nationality', '')
-    data['field_19'] = data_to_fill.get('full_name_of_father', '')
-    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_31'] = data_to_fill.get('legal_representative_id', '')
-    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
-    return data, checkboxes
+    return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_18(data_to_fill, additional_users):
-    # Function to fill data for 18-Certificado_residencia_comunitaria.pdf
-    data = {}
-    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
-
-    if data_to_fill["gender"] == "female":
-        data['field_8'] = True
-    else:
-        data['field_7'] = True
-    if data_to_fill["family_status"] == "single":
-        data['field_14'] = True
-    elif data_to_fill["family_status"] == "married":
-        data['field_15'] = True
-    elif data_to_fill["family_status"] == "widowed":
-        data['field_16'] = True
-    elif data_to_fill["family_status"] == "divorced":
-        data['field_17'] = True
-    elif data_to_fill["family_status"] == "separated":
-        data['field_18'] = True
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_21'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_4'] = surnames[1]
-    data['field_5'] = data_to_fill.get('name', '')
-    data['field_9'] = birth_dates[0]
-    data['field_57'] = birth_dates[1]
-    data['field_10'] = birth_dates[2]
-    data['field_13'] = data_to_fill.get('nationality', '')
-    data['field_19'] = data_to_fill.get('full_name_of_father', '')
-    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_31'] = data_to_fill.get('legal_representative_id', '')
-    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
-    return data, checkboxes
-
-
-def pdf_filler_23(data_to_fill, additional_users):
-    # Function to fill data for 23-Formulario_TIE_RU.pdf
-    data = {}
-    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
-
-    if data_to_fill["gender"] == "female":
-        data['field_8'] = True
-    else:
-        data['field_7'] = False
-    if data_to_fill["family_status"] == "single":
-        data['field_14'] = True
-    elif data_to_fill["family_status"] == "married":
-        data['field_15'] = True
-    elif data_to_fill["family_status"] == "widowed":
-        data['field_16'] = True
-    elif data_to_fill["family_status"] == "divorced":
-        data['field_17'] = True
-    elif data_to_fill["family_status"] == "separated":
-        data['field_18'] = True
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_21'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_4'] = surnames[1]
-    data['field_5'] = data_to_fill.get('name', '')
-    data['field_9'] = birth_dates[0]
-    data['field_57'] = birth_dates[1]
-    data['field_10'] = birth_dates[2]
-    data['field_13'] = data_to_fill.get('nationality', '')
-    data['field_19'] = data_to_fill.get('full_name_of_father', '')
-    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_31'] = data_to_fill.get('legal_representative_id', '')
-    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
-    return data, checkboxes
+    return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_19(data_to_fill, additional_users):
-    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
-    data = {}
-    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    return pdf_filler_template(data_to_fill, additional_users)
 
-    if data_to_fill["gender"] == "female":
-        data['field_8'] = True
-    else:
-        data['field_7'] = False
-    if data_to_fill["family_status"] == "single":
-        data['field_14'] = True
 
-    elif data_to_fill["family_status"] == "married":
-        data['field_15'] = True
-
-    elif data_to_fill["family_status"] == "widowed":
-        data['field_16'] = True
-
-    elif data_to_fill["family_status"] == "divorced":
-        data['field_17'] = True
-
-    elif data_to_fill["family_status"] == "separated":
-        data['field_18'] = True
-
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
-    surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
-    data['field_0'] = data_to_fill.get('passport_number', '')
-    data['field_1'] = nie_numbers[0]
-    data['field_2'] = nie_numbers[1]
-    data['field_3'] = nie_numbers[2]
-    data['field_21'] = surnames[0]
-    if len(surnames) > 1:
-        data['field_4'] = surnames[1]
-    data['field_5'] = data_to_fill.get('name', '')
-    data['field_9'] = birth_dates[0]
-    data['field_72'] = birth_dates[1]
-    data['field_10'] = birth_dates[2]
-    data['field_13'] = data_to_fill.get('nationality', '')
-    data['field_19'] = data_to_fill.get('full_name_of_father', '')
-    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
-    data['field_22'] = data_to_fill.get('spain_address', '')
-    data['field_23'] = data_to_fill.get('house_name', '')
-    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
-    data['field_25'] = data_to_fill.get('city', '')
-    data['field_26'] = data_to_fill.get('zip_code', '')
-    data['field_27'] = data_to_fill.get('province', '')
-    data['field_28'] = data_to_fill.get('mobile_phone', '')
-    data['field_29'] = data_to_fill.get('email', '')
-    data['field_30'] = data_to_fill.get('legal_representative_name', '')
-    data['field_31'] = data_to_fill.get('legal_representative_id', '')
-    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
-    return data, checkboxes
+def pdf_filler_23(data_to_fill, additional_users):
+    return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_hoja_padronal(data_to_fill, additional_users):
-    # Function to fill data for Hoja_Padronal.pdf
-    data, checkboxes = convert_to_pdf_form_data(data_to_fill)
+    data, checkboxes = pdf_filler_template(data_to_fill, additional_users)
     if additional_users:
         data = add_additional_users(data, additional_users)
-
     return data, checkboxes
 
 
 def pdf_filler_NIE_TIE(data_to_fill, additional_users):
-    # Function to fill data for Data Sheet for NIE_TIE - gottalovespain.pdf
     data = {
         'field_0': data_to_fill.get('name'),
         'field_1': data_to_fill.get('surname', ''),
         "id": data_to_fill.get("id", ""),
     }
-    print(data_to_fill.get("id", ""))
     return data, []
 
 
-def pdf_filler_empadronamiento(data_to_fill, additional_users):
-    # Function to fill data for Empadronamiento Form - gottalovespain.pdf
+def pdf_filler_empadronamiento(data_to_fill, additional_users=None):
     street_type, address = check_street(data_to_fill.get('spain_address', ''))
-
     data = {
         'Text1': address,
         'Choice2': street_type,
@@ -385,11 +145,7 @@ def pdf_filler_empadronamiento(data_to_fill, additional_users):
         'Text94': data_to_fill.get('nie', ''),
         'Text95': data_to_fill.get('city_of_birth', ''),
         'Text96': data_to_fill.get('country_of_birth', ''),
-
-
     }
-
-    print(data_to_fill.get("id", ""))
     return data, []
 
 
@@ -408,12 +164,10 @@ pdf_filler_docs_es_ext = {
 
 def convert_to_pdf_form_data(db_data):
     birth_date = db_data.get('birth_date')
-    if birth_date:
-        birth_spanish_time_format = str(time.strftime('%d/%m/%Y', time.strptime(birth_date, '%Y-%m-%d')))
-    else:
-        birth_spanish_time_format = None
+    birth_spanish_time_format = str(
+        time.strftime('%d/%m/%Y', time.strptime(birth_date, '%Y-%m-%d'))) if birth_date else None
     names = db_data.get('name').split(" ")
-    print(names)
+
     pdf_data_for_filling = {
         'untitled1': db_data.get('street_type', ""),
         'untitled2': db_data.get('street_name', ""),
@@ -443,34 +197,20 @@ def convert_to_pdf_form_data(db_data):
     if len(names) > 1:
         pdf_data_for_filling['untitled14'] = names[1]
 
-    # id type
     if db_data.get("nie"):
         pdf_data_for_filling['untitled23'] = True
     elif db_data.get("dni"):
         pdf_data_for_filling['untitled21'] = True
     elif db_data.get("passport_number"):
         pdf_data_for_filling['untitled22'] = True
-    # gender
+
     if db_data.get('gender', "") == 'male':
         pdf_data_for_filling['untitled15'] = True
     else:
         pdf_data_for_filling['untitled16'] = True
-    # case type
-    """TODO
-    if db_data.get('desired_service', "") == 'change residency':
-        pdf_data_for_filling['untitled28'] = True
-    elif db_data.get('desired_service', "") == 'omission':
-        pdf_data_for_filling['untitled29'] = True
-    elif db_data.get('desired_service', "") == 'birth':
-        pdf_data_for_filling['untitled30'] = True
-    elif db_data.get('desired_service', "") == 'change address':
-        pdf_data_for_filling['untitled31'] = True
-    elif db_data.get('desired_service', "") == 'change personal data':
-        pdf_data_for_filling['untitled32'] = True
-    """
+
     checkboxes = ["untitled28", "untitled29", "untitled30", "untitled31", "untitled32", "untitled23", "untitled21",
                   "untitled22", "untitled15", "untitled16"]
-
     return pdf_data_for_filling, checkboxes
 
 
@@ -488,7 +228,6 @@ def rename_pdf_fiedl_in_order(pdf_path):
         for index, field in enumerate(page.widgets()):
             field.field_name = new_field_name + str(index)
             field.update()
-    # add renamed keyword to the saved pdf
     pdf_path = pdf_path.replace(".pdf", "")
     pdf_path = pdf_path.replace("pdfs_to_fill", "tmp_pdfs")
     pdf_path += "fixed.pdf"
@@ -519,8 +258,6 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
             if field_name in pdf_data_for_filling:
                 field_value = pdf_data_for_filling[field_name]
                 if field_name in checkboxes and widget.field_type == 2:
-                    print(f"Checkbox {field_name} set to {field_value} in field type {widget.field_type}")
-
                     widget.field_value = field_value
                 else:
                     widget.field_value = str(field_value)
@@ -537,10 +274,8 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
 
     if pdf_data_for_filling.get("id") and "gottalovespain" in pdf_path:
         id_text = f"ID: {pdf_data_for_filling.get('id')}"
-        # Define position for the text annotation
-        page = doc.load_page(0)  # Load the first page
-        rect = fitz.Rect(10, 10, 100, 30)  # Define a specific location for easier retrieval
-        # Add free text annotation with a white color to make it effectively invisible
+        page = doc.load_page(0)
+        rect = fitz.Rect(10, 10, 100, 30)
         page.add_freetext_annot(rect, id_text, fontsize=12)
     else:
         if len(doc) > 1:
@@ -556,16 +291,14 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
 
 def add_additional_users(data, additional_users):
     base_pdf_index = 1
-    fields_per_user = 23  # Number of fields per additional user
+    fields_per_user = 23
     data['untitled107'] = str(len(additional_users) + 1).replace("(", "").replace(",)", "")
 
     checked = False
     for user_index, user in enumerate(additional_users):
         if user_index >= 4:
-            break  # Ensure we do not add more than 4 users
+            break
         current_base_index = base_pdf_index + user_index * fields_per_user
-        print(current_base_index)
-        print("______________")
         birth_spanish_time_format = str(time.strftime('%d/%m/%Y', time.strptime(user["birth_date"], '%Y-%m-%d')))
         if not checked:
             if user.get("dni"):
@@ -606,24 +339,11 @@ def add_additional_users(data, additional_users):
             data[f'field{current_base_index + 9}'] = True
         elif user.get("passport_number"):
             data[f'field{current_base_index + 10}'] = True
-        # gender
+
         if user.get('gender') == 'male':
             data[f'field{current_base_index + 3}'] = True
         else:
             data[f'field{current_base_index + 4}'] = True
-        # case type
-        """
-        if user.get('document_case_type'] == 'change residency':
-            data[f'field{current_base_index + 16}'] = True
-        elif user.get('document_case_type'] == 'omission':
-            data[f'field{current_base_index + 17}'] = True
-        elif user.get('document_case_type'] == 'birth':
-            data[f'field{current_base_index + 18}'] = True
-        elif user.get('document_case_type'] == 'change address':
-            data[f'field{current_base_index + 19}'] = True
-        elif user.get('document_case_type'] == 'change personal data':
-            data[f'field{current_base_index + 20}'] = True
-        """
     return data
 
 
@@ -633,12 +353,10 @@ def read_pdf_custom_id(pdf_path):
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
         for annot in page.annots():
-
             text = annot.info["content"]
             if text.startswith("ID: "):
                 custom_id = text[4:]
                 break
         if custom_id:
             break
-    print(f"Custom ID: {custom_id}")
     return custom_id

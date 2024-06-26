@@ -1,10 +1,33 @@
 import json
 import os
+import sys
+
 from supabase import create_client, Client
 
+
+"""
 url: str = os.environ.get(key="SUPABASE_URL", default="https://hetrvidiwvkrxaqeozgc.supabase.co")
 key: str = os.environ.get(key="SUPABASE_KEY",
                           default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhldHJ2aWRpd3ZrcnhhcWVvemdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM1NTE5NTUsImV4cCI6MjAyOTEyNzk1NX0.dpUKNQ65qsZaiRlrKoj9jiWhvdzhuFFxBP1ENGd_jGs")
+
+"""
+def load_config():
+    if hasattr(sys, '_MEIPASS'):
+        # If running in a PyInstaller bundle, get the config file from the bundle
+        config_path = os.path.join(sys._MEIPASS, 'config.json')
+    else:
+        # If running in a normal environment, get the config file from the current directory
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+
+    with open(config_path) as config_file:
+        return json.load(config_file)
+
+
+config = load_config()
+
+url: str = config.get("SUPABASE_URL")
+key: str = config.get("SUPABASE_KEY")
+
 
 supabase_client: Client = create_client(url, key)
 
@@ -52,6 +75,13 @@ def remove_data(user_id):
         print(f"Failed to remove data: {response.json()}")
 
 """
+
+
+def fetch_enum_values(table, column):
+    response = supabase_client.table(table).select(column).execute()
+    if response.data:
+        return list(set(item[column] for item in response.data if item[column] is not None))
+    return []
 
 
 # Fetch data from both tables
@@ -129,6 +159,19 @@ def example():
     insert_data({"name": "John", "surname": "Doe", "email": "2D5wK@example.com"})
     merged_data = fetch_data_nie_tie_initial()
     print("Merged Data: ", merged_data)
+
+
+def fetch_empadron_data():
+    empadron_data = supabase_client.table("empadron_data").select("*").execute()
+    return empadron_data.data
+
+
+def insert_empadron_data(data):
+    response = supabase_client.table("empadron_data").insert(data).execute()
+    if response:
+        print("Data inserted successfully into empadron_data.")
+    else:
+        print(f"Failed to insert data into empadron_data: {response.json()}")
 
 
 """exmaple data 
