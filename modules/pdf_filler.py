@@ -20,9 +20,12 @@ def check_street(spain_address):
 
 
 def fill_common_fields(data_to_fill):
-    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    nie_numbers = data_to_fill.get('nie', ' - - ')
+    if not nie_numbers:
+        nie_numbers = ['', '', '']
+
     surnames = data_to_fill.get('surname', '   ').split(" ")
-    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    birth_dates = data_to_fill.get('birth_date', ' . . ').split(".")
 
     data = {
         'field_0': data_to_fill.get('passport_number', ''),
@@ -67,14 +70,14 @@ def fill_family_status(data_to_fill):
         "separated": 'field_18'
     }
     checkboxes = list(family_status_map.values()) + ["field_8", "field_7"]
-    data = {family_status_map[data_to_fill["family_status"]]: True} if data_to_fill[
-                                                                           "family_status"] in family_status_map else {}
+    data = {family_status_map[data_to_fill.get("family_status", "")]: True} if (data_to_fill.get("family_status", "")
+                                                                                in family_status_map) else {}
 
     return data, checkboxes
 
 
 def fill_gender(data_to_fill):
-    return {'field_8': True} if data_to_fill["gender"] == "female" else {'field_7': True}
+    return {'field_8': True} if data_to_fill.get("gender") == "female" else {'field_7': True}
 
 
 def pdf_filler_template(data_to_fill, additional_users, form_specific_fields=None):
@@ -85,40 +88,341 @@ def pdf_filler_template(data_to_fill, additional_users, form_specific_fields=Non
     data.update(family_status_data)
     data.update(gender_data)
 
-    if form_specific_fields:
-        data.update(form_specific_fields(data_to_fill))
-
     return data, checkboxes
 
 
 def pdf_filler_11(data_to_fill, additional_users):
-    return pdf_filler_template(data_to_fill, additional_users)
+    # Function to fill data for 11-Formulario_larga_duracixn.pdf
+    data = {}
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    print(data_to_fill)
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    if data_to_fill.get("gender") == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = True
+    # Family status
+    family_status_map = {
+        "single": 'field_14',
+        "married": 'field_15',
+        "widowed": 'field_16',
+        "divorced": 'field_17',
+        "separated": 'field_18'
+    }
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    family_status_field = family_status_map.get(data_to_fill["family_status"])
+    if family_status_field:
+        data[family_status_field] = True
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_59'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_10'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_11'] = data_to_fill.get('city_of_birth', '')
+    data['field_12'] = data_to_fill.get('country_of_birth', '')
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    print(data)
+    return data, checkboxes
 
 
 def pdf_filler_15(data_to_fill, additional_users):
-    return pdf_filler_template(data_to_fill, additional_users)
+    # Function to fill data for 15-Formulario_NIE_y_certificados.pdf
+    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
+    data = {}
+    checkboxes = ["field_9", "field_8", "field_15", "field_16", "field_17", "field_18", "field_19"]
+    if data_to_fill.get("gender", "") == "male":
+        data['field_8'] = True
+    else:
+        data['field_9'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_18'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_19'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_4'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_5'] = surnames[1]
+    data['field_6'] = data_to_fill.get('name', '')
+    data['field_10'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_57'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_11'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_12'] = data_to_fill.get('city_of_birth', '')
+    data['field_13'] = data_to_fill.get('country_of_birth', '')
+    data['field_14'] = data_to_fill.get('nationality', '')
+    data['field_20'] = data_to_fill.get('full_name_of_father', '')
+    data['field_21'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_35'] = data_to_fill.get('legal_representative_id', '')
+    data['field_31'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
 
 
 def pdf_filler_17(data_to_fill, additional_users):
-    return pdf_filler_template(data_to_fill, additional_users)
+    # Function to fill data for 17-Formulario_TIE.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    if data_to_fill.get("gender","") == "male":
+        data['field_7'] = True
+    else:
+        data['field_8'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_21'] = surnames[0] if len(surnames) > 0 else ''
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_57'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_10'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_12'] = data_to_fill.get('city_of_birth', '')
+    data['field_11'] = data_to_fill.get('country_of_birth', '')
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
 
 
 def pdf_filler_18(data_to_fill, additional_users):
-    return pdf_filler_template(data_to_fill, additional_users)
+    # Function to fill data for 18-Certificado_residencia_comunitaria.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    if data_to_fill.get("gender", "") == "male":
+        data['field_7'] = True
+    else:
+        data['field_8'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_21'] = surnames[0] if len(surnames) > 0 else ''
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_57'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_10'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_11'] = data_to_fill.get('city_of_birth', '')
 
-
-def pdf_filler_19(data_to_fill, additional_users):
-    return pdf_filler_template(data_to_fill, additional_users)
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
 
 
 def pdf_filler_23(data_to_fill, additional_users):
+    # Function to fill data for 23-Formulario_TIE_RU.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    if data_to_fill.get("gender") == "male":
+        data['field_7'] = True
+    else:
+        data['field_8'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_21'] = surnames[0] if len(surnames) > 0 else ''
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_57'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_10'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_11'] = data_to_fill.get('city_of_birth', '')
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_19(data_to_fill, additional_users):
+    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    if data_to_fill.get("gender") == "male":
+        data['field_7'] = True
+    else:
+        data['field_8'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_date_str = data_to_fill.get('birth_date', "").replace(".", "-")
+    birth_date_str = birth_date_str.replace(",", "-")
+    birth_dates = birth_date_str.split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0] if len(nie_numbers) > 0 else ''
+    data['field_2'] = nie_numbers[1] if len(nie_numbers) > 1 else ''
+    data['field_3'] = nie_numbers[2] if len(nie_numbers) > 2 else ''
+    data['field_21'] = surnames[0] if len(surnames) > 0 else ''
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0] if len(birth_dates) > 0 else ''
+    data['field_72'] = birth_dates[1] if len(birth_dates) > 1 else ''
+    data['field_10'] = birth_dates[2] if len(birth_dates) > 2 else ''
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_template_hoja_empadron_data(additional_users):
+    return convert_to_pdf_form_data(additional_users)
+
+
+def pdf_filler_template_hoja_normal(data_to_fill, additional_users):
     return pdf_filler_template(data_to_fill, additional_users)
 
 
 def pdf_filler_hoja_padronal(data_to_fill, additional_users):
-    data, checkboxes = pdf_filler_template(data_to_fill, additional_users)
+    data, checkboxes = pdf_filler_template_hoja_normal(data_to_fill, additional_users)
     if additional_users:
-        data = add_additional_users(data, additional_users)
+        data, checkboxes = pdf_filler_template_hoja_empadron_data(additional_users)
+
     return data, checkboxes
 
 
@@ -163,54 +467,75 @@ pdf_filler_docs_es_ext = {
 
 
 def convert_to_pdf_form_data(db_data):
-    birth_date = db_data.get('birth_date')
-    birth_spanish_time_format = str(
-        time.strftime('%d/%m/%Y', time.strptime(birth_date, '%Y-%m-%d'))) if birth_date else None
-    names = db_data.get('name').split(" ")
-
+    # Assuming db_data contains all the necessary fields
     pdf_data_for_filling = {
-        'untitled1': db_data.get('street_type', ""),
-        'untitled2': db_data.get('street_name', ""),
-        'untitled3': db_data.get('house_name', ""),
-        'untitled4': db_data.get('building_letter', ""),
-        'untitled5': db_data.get('apt_number', ""),
-        'untitled6': db_data.get('building_portal', ""),
-        'untitled8': str(db_data.get('building_floor', "")),
-        'untitled9': str(db_data.get('building_door_number', "")),
-        'untitled10': True,
-        'untitled12': db_data.get('surname', ""),
-        'untitled13': names[0],
-        'untitled17': birth_spanish_time_format,
-        'untitled18': db_data.get('city_of_birth', ""),
-        'untitled19': db_data.get('country_of_birth', ""),
-        'untitled20': db_data.get('nationality', ""),
-        'untitled24': db_data.get('id_number', ""),
-        'untitled25': db_data.get('study_level', ""),
-        'untitled26': db_data.get('mobile_phone', ""),
-        'untitled27': db_data.get('email', ""),
-        'untitled33': db_data.get('prev_province_spain', ""),
-        'untitled34': db_data.get('prev_country', ""),
-        'untitled105': db_data.get('landlord_name', ""),
-        'untitled106': db_data.get('landlord_id', ""),
-        'untitled107': str(db_data.get('people_sum_involved', "")),
+        'untitled111': db_data.get('zip_code', ''),
+        'untitled1': db_data.get('street_type', ''),
+        'untitled2': db_data.get('street_name', ''),
+        'untitled3': db_data.get('number', ''),
+        'untitled4': db_data.get('letter', ''),
+        'untitled5': db_data.get('block', ''),
+        'untitled6': db_data.get('gate', ''),
+        'untitled8': db_data.get('floor', ''),
+        'untitled9': db_data.get('door', ''),
+        'untitled12': db_data.get('first_name_1', ''),
+        'untitled13': db_data.get('surname_1', '').split(' ')[0],  # Assuming surname is split into parts
+        'untitled14': db_data.get('surname_1', '').split(' ')[1] if len(
+            db_data.get('surname_1', '').split(' ')) > 1 else '',
+        'untitled17': db_data.get('birth_date_1', ''),
+        'untitled18': db_data.get('city_of_birth_1', ''),
+        'untitled19': db_data.get('country_of_birth_1', ''),
+        'untitled20': db_data.get('nationality_1', ''),
+        'untitled25': db_data.get('highest_education_1', ''),
+        'untitled26': db_data.get('mobile_1', ''),
+        'untitled27': db_data.get('email_1', ''),
+        'untitled24': db_data.get('nie_1', ''),
+        'untitled48.field13': db_data.get('nie_2', ''),
+        'field36': db_data.get('nie_3', ''),
+        'field59': db_data.get('nie_4', ''),
+        'field1': db_data.get('first_name_2', ''),
+        'field2': db_data.get('surname_2', '').split(' ')[0],
+        'field3': db_data.get('surname_2', '').split(' ')[1] if len(
+            db_data.get('surname_2', '').split(' ')) > 1 else '',
+        'field6': db_data.get('birth_date_2', ''),
+        'field7': db_data.get('city_of_birth_2', ''),
+        'field8': db_data.get('country_of_birth_2', ''),
+        'field9': db_data.get('nationality_2', ''),
+        'field14': db_data.get('highest_education_2', ''),
+        'field16': db_data.get('email_2', ''),
+        'field24': db_data.get('first_name_3', ''),
+        'field25': db_data.get('surname_3', '').split(' ')[0],
+        'field26': db_data.get('surname_3', '').split(' ')[1] if len(
+            db_data.get('surname_3', '').split(' ')) > 1 else '',
+        'field29': db_data.get('birth_date_3', ''),
+        'field30': db_data.get('city_of_birth_3', ''),
+        'field31': db_data.get('country_of_birth_3', ''),
+        'field32': db_data.get('nationality_3', ''),
+        'field37': db_data.get('highest_education_3', ''),
+        'field39': db_data.get('email_3', ''),
+        'field47': db_data.get('first_name_4', ''),
+        'field48': db_data.get('surname_4', '').split(' ')[0],
+        'field49': db_data.get('surname_4', '').split(' ')[1] if len(
+            db_data.get('surname_4', '').split(' ')) > 1 else '',
+        'field52': db_data.get('birth_date_4', ''),
+        'field53': db_data.get('city_of_birth_4', ''),
+        'field54': db_data.get('country_of_birth_4', ''),
+        'field55': db_data.get('nationality_4', ''),
+        'field60': db_data.get('highest_education_4', ''),
+        'field62': db_data.get('email_4', ''),
+        'untitled105': db_data.get('landlord_name', ''),
+        'untitled106': db_data.get('landlord_id_dni_nie', '')
     }
-    if len(names) > 1:
-        pdf_data_for_filling['untitled14'] = names[1]
 
-    if db_data.get("nie"):
-        pdf_data_for_filling['untitled23'] = True
-    elif db_data.get("dni"):
-        pdf_data_for_filling['untitled21'] = True
-    elif db_data.get("passport_number"):
-        pdf_data_for_filling['untitled22'] = True
-
-    if db_data.get('gender', "") == 'male':
+    # Setting checkboxes for gender and other boolean fields
+    if db_data.get('gender_1') == 'male':
         pdf_data_for_filling['untitled15'] = True
     else:
         pdf_data_for_filling['untitled16'] = True
 
-    checkboxes = ["untitled28", "untitled29", "untitled30", "untitled31", "untitled32", "untitled23", "untitled21",
-                  "untitled22", "untitled15", "untitled16"]
+    # Add checkboxes or other boolean fields based on your specific requirements
+    checkboxes = ["untitled15", "untitled16", "untitled10", "untitled11"]
+
     return pdf_data_for_filling, checkboxes
 
 
@@ -252,6 +577,13 @@ def fill_pdf(pdf_path, db_data, additional_users=None):
         for widget in page.widgets():
             if "Hoja" not in pdf_path and "Empadronamiento" not in pdf_path:
                 widget.field_name = f"field_{field_index}"
+                if widget.field_value == "tmp":
+                    print(widget.field_name)
+
+            else:
+
+                #widget.field_value = widget.field_name
+                pass
             field_index += 1
             widget.update()
             field_name = widget.field_name
