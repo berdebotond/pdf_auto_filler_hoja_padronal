@@ -4,7 +4,7 @@ import traceback
 from tkinter import ttk, messagebox
 from threading import Thread
 from modules.supabase_client import update_data, fetch_data_nie_tie_initial, insert_data, remove_user_from_db, \
-    fetch_empadron_data, insert_empadron_data
+    fetch_empadron_data, insert_empadron_data, merge_empadron_data_with_tie_nie
 from modules.pdf_filler import fill_pdf, get_executable_dir
 import os
 import sys
@@ -95,6 +95,8 @@ def fetch_users():
     try:
         db_data = fetch_data_nie_tie_initial()
         empadronamiento_data = fetch_empadron_data()
+        empadronamiento_data = merge_empadron_data_with_tie_nie(db_data, empadronamiento_data)
+        print(empadronamiento_data)
         for data in db_data:
             data["user_type"] = "nie_tie"
         users = db_data

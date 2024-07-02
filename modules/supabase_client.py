@@ -4,13 +4,14 @@ import sys
 
 from supabase import create_client, Client
 
-
 """
 url: str = os.environ.get(key="SUPABASE_URL", default="https://hetrvidiwvkrxaqeozgc.supabase.co")
 key: str = os.environ.get(key="SUPABASE_KEY",
                           default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhldHJ2aWRpd3ZrcnhhcWVvemdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM1NTE5NTUsImV4cCI6MjAyOTEyNzk1NX0.dpUKNQ65qsZaiRlrKoj9jiWhvdzhuFFxBP1ENGd_jGs")
 
 """
+
+
 def load_config():
     if hasattr(sys, '_MEIPASS'):
         # If running in a PyInstaller bundle, get the config file from the bundle
@@ -27,7 +28,6 @@ config = load_config()
 
 url: str = config.get("SUPABASE_URL")
 key: str = config.get("SUPABASE_KEY")
-
 
 supabase_client: Client = create_client(url, key)
 
@@ -94,17 +94,32 @@ def fetch_data_nie_tie_initial():
 
 # Merge data based on the foreign key initial_id using a join-like approach
 def merge_data(data_sheet_nie_tie, initial_data_request):
-    # Create a dictionary for quick lookup of initial data by id
-    initial_data_dict = {item['id']: item for item in initial_data_request}
-
+    # Create a dictionary for quick lookup of initial data by name and surname
+    initial_data_dict = {
+        f"{initial.get('name').strip().lower().replace(' ', '')}{initial.get('surname').strip().lower().replace(' ', '')}": initial
+        for initial in initial_data_request}
     merged_data = []
+
     for nie_tie in data_sheet_nie_tie:
-        initial_id = nie_tie.get('initial_id')
-        if initial_id and initial_id in initial_data_dict:
-            merged_entry = {**nie_tie, **initial_data_dict[initial_id]}
+        name_surname = (nie_tie.get('name', '').strip().lower().replace(" ", "") + nie_tie.get('surname',
+                                                                                               '').strip().lower().replace(
+            " ", ""))
+        print("-------------------")
+        print(name_surname, initial_data_dict)
+
+        if name_surname in initial_data_dict:
+            merged_entry = {**nie_tie, **initial_data_dict[name_surname]}
+            initial_data_dict.pop(name_surname)
         else:
             merged_entry = {**nie_tie}
+
         merged_data.append(merged_entry)
+
+    return merged_data
+
+    # Add any remaining initial data that was not found in the nie_tie data
+    for name_surname, initial_data in initial_data_dict.items():
+        merged_data.append(initial_data)
 
     return merged_data
 
@@ -164,6 +179,42 @@ def example():
 def fetch_empadron_data():
     empadron_data = supabase_client.table("empadron_data").select("*").execute()
     return empadron_data.data
+
+
+def fetch_empadron_data():
+    empadron_data = supabase_client.table("empadron_data").select("*").execute()
+    return empadron_data.data
+
+
+def merge_empadron_data_with_tie_nie(merged_data, empadron_data):
+    # Create a dictionary for quick lookup of initial data by name and surname
+    initial_data_dict = {
+        f"{initial.get('name').strip().lower().replace(' ', '')}{initial.get('surname').strip().lower().replace(' ', '')}": initial
+        for initial in merged_data}
+
+    merged_data = []
+
+    for empadron in empadron_data:
+        # Extract and normalize names and surnames
+        for i in range(1, 6):
+            first_name = empadron.get(f'first_name_{i}', '').strip().lower().replace(' ', '')
+            surname = empadron.get(f'surname_{i}', '').strip().lower().replace(' ', '')
+            if first_name and surname:
+                name_surname = first_name + surname
+                if name_surname in initial_data_dict:
+                    merged_entry = {**empadron, **initial_data_dict[name_surname]}
+                    merged_data.append(merged_entry)
+                    initial_data_dict.pop(name_surname)
+                    break
+    # add the remaining empadron data that was not found in the nie_tie data
+    for empadron in empadron_data:
+        first_name = empadron.get('first_name_1', '').strip().lower().replace(' ', '')
+        surname = empadron.get('surname_1', '').strip().lower().replace(' ', '')
+        name_surname = first_name + surname
+        if name_surname not in initial_data_dict:
+
+            merged_data.append(empadron)
+    return merged_data
 
 
 def insert_empadron_data(data):
