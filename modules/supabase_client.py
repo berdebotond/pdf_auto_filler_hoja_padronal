@@ -88,6 +88,10 @@ def fetch_enum_values(table, column):
 def fetch_data_nie_tie_initial():
     data_sheet_nie_tie = supabase_client.table("data_sheet_nie_tie").select("*").execute()
     initial_data_request = supabase_client.table("initial_data_request").select("*").execute()
+    # remove empty data where name or surname is empty
+    data_sheet_nie_tie.data = [item for item in data_sheet_nie_tie.data if item.get('name') and item.get('surname')]
+    initial_data_request.data = [item for item in initial_data_request.data if item.get('name') and item.get('surname')]
+
     merged_data = merge_data(data_sheet_nie_tie.data, initial_data_request.data)
     return merged_data
 
@@ -178,11 +182,15 @@ def example():
 
 def fetch_empadron_data():
     empadron_data = supabase_client.table("empadron_data").select("*").execute()
+    # rmeove data where first_name_1 or surname_1 is empty
+    empadron_data.data = [item for item in empadron_data.data if item.get('first_name_1') and item.get('surname_1')]
     return empadron_data.data
 
 
 def fetch_empadron_data():
     empadron_data = supabase_client.table("empadron_data").select("*").execute()
+    # rmeove data where first_name_1 or surname_1 is empty
+    empadron_data.data = [item for item in empadron_data.data if item.get('first_name_1') and item.get('surname_1')]
     return empadron_data.data
 
 
