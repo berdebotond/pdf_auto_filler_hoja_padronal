@@ -91,9 +91,21 @@ def fetch_data_nie_tie_initial():
     # remove empty data where name or surname is empty
     data_sheet_nie_tie.data = [item for item in data_sheet_nie_tie.data if item.get('name') and item.get('surname')]
     initial_data_request.data = [item for item in initial_data_request.data if item.get('name') and item.get('surname')]
+    # remove duplicate with same name and surname
+    # Remove duplicates with same name and surname
+    seen = set()
+
+
+
 
     merged_data = merge_data(data_sheet_nie_tie.data, initial_data_request.data)
-    return merged_data
+    updated_merged = []
+    for item in merged_data:
+        name_surname = (item['name'], item['surname'])
+        if name_surname not in seen:
+            seen.add(name_surname)
+            updated_merged.append(item)
+    return updated_merged
 
 
 # Merge data based on the foreign key initial_id using a join-like approach
@@ -184,6 +196,8 @@ def fetch_empadron_data():
     empadron_data = supabase_client.table("empadron_data").select("*").execute()
     # rmeove data where first_name_1 or surname_1 is empty
     empadron_data.data = [item for item in empadron_data.data if item.get('first_name_1') and item.get('surname_1')]
+    # remove duplicate data
+    empadron_data.data = [dict(t) for t in {tuple(d.items()) for d in empadron_data.data}]
     return empadron_data.data
 
 
@@ -191,6 +205,8 @@ def fetch_empadron_data():
     empadron_data = supabase_client.table("empadron_data").select("*").execute()
     # rmeove data where first_name_1 or surname_1 is empty
     empadron_data.data = [item for item in empadron_data.data if item.get('first_name_1') and item.get('surname_1')]
+    # remove duplicate data
+    empadron_data.data = [dict(t) for t in {tuple(d.items()) for d in empadron_data.data}]
     return empadron_data.data
 
 
