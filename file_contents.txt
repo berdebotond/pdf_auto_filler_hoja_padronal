@@ -1,0 +1,1425 @@
+Path: ./setup.py
+from setuptools import setup, find_packages
+
+setup(
+    name="PDF Generator & User Data Updater",
+    version="1.0",
+    packages=find_packages(),
+    install_requires=[
+        "tkinter",
+        "threading",
+        "supabase",
+        "fpdf2",
+    ],
+)
+
+________________________________________________________________________________
+
+Path: ./main.spec
+# -*- mode: python ; coding: utf-8 -*-
+
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=[],
+    datas=[('config.json', '.'), ('pdf', 'pdf')],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
+    name='main',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
+________________________________________________________________________________
+
+Path: ./main.py
+import json
+import tkinter as tk
+import traceback
+from tkinter import ttk, messagebox
+from threading import Thread
+from modules.supabase_client import update_data, fetch_data_nie_tie_initial, insert_data, remove_user_from_db, \
+    fetch_empadron_data, insert_empadron_data
+from modules.pdf_filler import fill_pdf, get_executable_dir
+import os
+import sys
+from tkinter.font import Font
+from modules.utils import get_resource_path, load_pdfs
+
+# Global variables
+users = []
+selected_users = []
+
+# Define the enum values
+enum_values = {
+    "gender": ["Man", "Woman"],
+    "id_documnet_type": ["NIE", "DNI", "Passport"],
+    "document_case_type": ["change residency", "omission", "birth", "change address", "change personal data"]
+}
+
+
+def generate_pdf():
+    if selected_users:
+        user_data = selected_users[0]
+        additional = selected_users[1:] if len(selected_users) > 1 else None
+    else:
+        selected_user = user_combobox.get()
+        if not selected_user:
+            messagebox.showerror("Error", "No user selected.")
+            return
+
+        selected_id = selected_user.split(' - ')[-1]
+        user_data = next(
+            (user for user in users if f"{user['surname']} {user['name']} - {user['id']}" == selected_user),
+            None)
+
+        if not user_data:
+            messagebox.showerror("Error", "Selected user not found.")
+            return
+        if "first_name_1" in user_data.keys():
+            additional = user_data
+        else:
+            additional = None
+    print("0----------------------")
+    print(user_data)
+    pdf_name = pdf_combobox.get()
+    if not pdf_name:
+        messagebox.showerror("Error", "No PDF file selected.")
+        return
+    print(additional)
+    pdf_path = get_resource_path(os.path.join("pdf", pdf_name))
+
+    try:
+        fill_pdf(pdf_path, user_data, additional)
+        messagebox.showinfo("Success",
+                            f"PDF generated successfully for {user_data['surname']} {user_data['name']}.")
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to generate PDF: {traceback.format_exc(e)}")
+
+
+nie_tie_fields = ["name", "surname", "city_of_birth", "country_of_birth", "family_status", "gender",
+                  "full_name_of_father", "full_name_of_mother", "spain_address", "house_name", "apt_number", "city",
+                  "zip_code", "province", "legal_representative_name", "legal_representative_id",
+                  "legal_representative_relation", "consent_communication_electronically", "apply_digital_certificate",
+                  "no_consent_data_consultation", "comments", "birth_date", "nationality", "additional_nationality",
+                  "passport_number", "id_number", "nie", "mobile_phone", "email", "desired_service",
+                  "not_available_appointments", "appointment_deadline", "appointment_location", "referral_source"]
+
+empadron_fields = [
+    "id", "street_name", "type", "zip_code", "municipality", "number", "letter", "block", "gate", "stairs", "floor",
+    "door", "voluntary_statement", "inhabitants_not_removed", "rent_contract", "landlord_name", "landlord_id_dni_nie",
+    "first_name_1", "surname_1", "nie_1", "gender_1", "city_of_birth_1", "country_of_birth_1", "highest_education_1",
+    "moved_spain_from_other_country_1", "birth_newborns_1", "moved_within_spain_1", "change_personal_data_1",
+    "vote_municipal_level_1", "change_europe_voting_right_1", "first_name_2", "surname_2", "nie_2", "gender_2",
+    "city_of_birth_2", "country_of_birth_2", "highest_education_2", "moved_spain_from_other_country_2",
+    "birth_newborns_2", "moved_within_spain_2", "change_personal_data_2", "vote_municipal_level_2",
+    "change_europe_voting_right_2", "first_name_3", "surname_3", "nie_3", "gender_3", "city_of_birth_3",
+    "country_of_birth_3", "highest_education_3", "moved_spain_from_other_country_3", "birth_newborns_3",
+    "moved_within_spain_3", "change_personal_data_3", "vote_municipal_level_3", "change_europe_voting_right_3",
+    "first_name_4", "surname_4", "nie_4", "gender_4", "city_of_birth_4", "country_of_birth_4", "highest_education_4",
+    "moved_spain_from_other_country_4", "birth_newborns_4", "moved_within_spain_4", "change_personal_data_4",
+    "vote_municipal_level_4", "change_europe_voting_right_4", "first_name_5", "surname_5", "nie_5", "gender_5",
+    "city_of_birth_5", "country_of_birth_5", "highest_education_5", "moved_spain_from_other_country_5",
+    "birth_newborns_5", "moved_within_spain_5", "change_personal_data_5", "vote_municipal_level_5",
+    "change_europe_voting_right_5", "street_type", "landlord_type"
+]
+
+
+def fetch_users():
+    global users
+    try:
+        db_data = fetch_data_nie_tie_initial()
+        empadronamiento_data = fetch_empadron_data()
+        for data in db_data:
+            data["user_type"] = "nie_tie"
+        users = db_data
+        empadron_data = []
+        for data in empadronamiento_data:
+            data["surname"] = "Empadronamiento " + data["surname_1"]
+            data["name"] = data["first_name_1"]
+            data["user_type"] = "empadron"
+            empadron_data.append(data)
+
+        users.extend(empadron_data)
+        update_combobox(users)
+        update_listbox(users)
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to fetch users: {e}")
+
+
+def fetch_users_thread():
+    Thread(target=fetch_users).start()
+
+
+def update_combobox(users):
+    user_details = [f'{user["surname"]} {user["name"]} - {user["id"]}' for user in users]
+    user_combobox['values'] = user_details
+
+
+def search_users(event):
+    query = search_entry.get().lower()
+    filtered_users = [user for user in users if
+                      query in (user.get("email", "").lower() or query in user.get("surname",
+                                                                                   "").lower() or query in user.get(
+                          "name", "").lower())]
+    update_listbox(filtered_users)
+
+
+def update_listbox(filtered_users):
+    search_results_listbox.delete(0, tk.END)
+    for user in filtered_users:
+        search_results_listbox.insert(tk.END, f'{user["surname"]} {user["name"]} - {user["id"]}')
+
+
+def select_user(event):
+    if not search_results_listbox.curselection():
+        return
+    selected_text = search_results_listbox.get(search_results_listbox.curselection())
+    selected_id = selected_text.split(' - ')[-1]
+    user_combobox.set(selected_text)
+
+
+def update_user():
+    selected_user = user_combobox.get()
+    if not selected_user:
+        messagebox.showerror("Error", "No user selected.")
+        return
+
+    selected_user_data = next(
+        (user for user in users if f'{user["surname"]} {user["name"]} - {user["id"]}' == selected_user), None)
+    if not selected_user_data:
+        messagebox.showerror("Error", "User not found.")
+        return
+    open_update_popup(selected_user_data)
+
+
+def sync_selection(event):
+    selected_text = user_combobox.get()
+    selected_id = selected_text.split(' - ')[-1]
+    for idx, user in enumerate(users):
+        if str(user["id"]) == selected_id:
+            search_results_listbox.selection_clear(0, tk.END)
+            search_results_listbox.selection_set(idx)
+            break
+
+
+def add_user_to_list():
+    selected_text = user_combobox.get()
+    selected_id = selected_text.split(' - ')[-1]
+    if not selected_id:
+        messagebox.showerror("Error", "No user selected.")
+        return
+    if len(selected_users) >= 4:
+        messagebox.showerror("Error", "Maximum of 4 users can be added.")
+        return
+
+    user_data = next((user for user in users if str(user["id"]) == selected_id), None)
+    if not user_data:
+        messagebox.showerror("Error", "Selected user not found.")
+        return
+
+    if user_data in selected_users:
+        messagebox.showinfo("Info", "User is already in the list.")
+        return
+
+    selected_users.append(user_data)
+    update_selected_users_listbox()
+
+
+def remove_user_from_list():
+    if not selected_users_listbox.curselection():
+        return
+    selected_text = selected_users_listbox.get(selected_users_listbox.curselection())
+    selected_id = selected_text.split(' - ')[-1]
+
+    user_data = next((user for user in selected_users if str(user["id"]) == selected_id), None)
+    if user_data:
+        selected_users.remove(user_data)
+        update_selected_users_listbox()
+
+
+def update_selected_users_listbox():
+    selected_users_listbox.delete(0, tk.END)
+    for user in selected_users:
+        selected_users_listbox.insert(tk.END, f'{user["surname"]} {user["name"]}')
+
+
+def remove_user():
+    selected_user = user_combobox.get().split(' - ')[-1]
+    if not selected_user:
+        messagebox.showerror("Error", "No user selected.")
+        return
+
+    selected_user_data = next((user for user in users if str(user["id"]) == selected_user), None)
+    if not selected_user_data:
+        messagebox.showerror("Error", "User not found.")
+        return
+
+    try:
+        remove_user_from_db(selected_user_data['id'])
+        messagebox.showinfo("Success", "User removed successfully.")
+        fetch_users_thread()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to remove user: {e}")
+
+
+def open_update_popup(user):
+    user_type = user.get("user_type", "nie_tie")
+    print(user)
+    if user_type == "nie_tie":
+        create_nie_tie_popup(user)
+    elif user_type == "empadron":
+        create_empadron_popup(user)
+
+
+def create_nie_tie_popup(user):
+    popup = tk.Toplevel(root)
+    popup.title("Update NIE/TIE User")
+    popup.geometry("600x600")
+
+    canvas = tk.Canvas(popup)
+    scrollbar = ttk.Scrollbar(popup, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    popup_entries = {}
+    row = 0
+    for key in nie_tie_fields:
+        ttk.Label(scrollable_frame, text=f"{key}:").grid(column=0, row=row, padx=10, pady=5, sticky=tk.W)
+        if key in enum_values:
+            entry = ttk.Combobox(scrollable_frame, values=enum_values[key], state="readonly")
+        else:
+            entry = ttk.Entry(scrollable_frame)
+        entry.grid(column=1, row=row, padx=10, pady=5, sticky="ew")
+        entry.insert(0, str(user.get(key, "")))
+        popup_entries[key] = entry
+        row += 1
+
+    def save_nie_tie():
+        updated_data = {key: entry.get() for key, entry in popup_entries.items()}
+        update_user_data(user, updated_data)
+        fetch_users_thread()
+        popup.destroy()
+
+    ttk.Button(scrollable_frame, text="Save", command=save_nie_tie).grid(column=0, row=row, padx=10, pady=10,
+                                                                         columnspan=2)
+
+
+def create_empadron_popup(user):
+    popup = tk.Toplevel(root)
+    popup.title("Update Empadron User")
+    popup.geometry("600x600")
+
+    canvas = tk.Canvas(popup)
+    scrollbar = ttk.Scrollbar(popup, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    popup_entries = {}
+    row = 0
+    for key in empadron_fields:
+        ttk.Label(scrollable_frame, text=f"{key}:").grid(column=0, row=row, padx=10, pady=5, sticky=tk.W)
+        if key in enum_values:
+            entry = ttk.Combobox(scrollable_frame, values=enum_values[key], state="readonly")
+        else:
+            entry = ttk.Entry(scrollable_frame)
+        entry.grid(column=1, row=row, padx=10, pady=5, sticky="ew")
+        entry.insert(0, str(user.get(key, "")))
+        popup_entries[key] = entry
+        row += 1
+
+    def save_empadron():
+        updated_data = {key: entry.get() for key, entry in popup_entries.items()}
+        insert_empadron_data(updated_data)
+        fetch_users_thread()
+
+        popup.destroy()
+
+    ttk.Button(scrollable_frame, text="Save", command=save_empadron).grid(column=0, row=row, padx=10, pady=10,
+                                                                          columnspan=2)
+
+
+def update_user_data(user, updated_data):
+    try:
+        update_data(user['id'], updated_data)
+        messagebox.showinfo("Success", "User data updated successfully.")
+        fetch_users_thread()
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to update user: {e}")
+
+
+def open_add_user_popup(user_type):
+    popup = tk.Toplevel(root)
+    popup.title(f"Add New {user_type.upper()} User")
+    popup.geometry("600x600")
+
+    canvas = tk.Canvas(popup)
+    scrollbar = ttk.Scrollbar(popup, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")
+        )
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    if user_type == "nie_tie":
+        fields = nie_tie_fields
+        insert_function = insert_data
+    else:
+        fields = empadron_fields
+        insert_function = insert_empadron_data
+
+    popup_entries = {}
+    row = 0
+    for key in fields:
+        ttk.Label(scrollable_frame, text=f"{key}:").grid(column=0, row=row, padx=10, pady=5, sticky=tk.W)
+        if key in enum_values:
+            entry = ttk.Combobox(scrollable_frame, values=enum_values[key], state="readonly")
+        else:
+            entry = ttk.Entry(scrollable_frame)
+        entry.grid(column=1, row=row, padx=10, pady=5, sticky="ew")
+        popup_entries[key] = entry
+        row += 1
+
+    def save_new_user():
+        new_user_data = {key: entry.get() for key, entry in popup_entries.items()}
+        try:
+            insert_function(new_user_data)
+            messagebox.showinfo("Success", f"New {user_type.upper()} user added successfully.")
+            fetch_users_thread()
+            popup.destroy()
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to add new {user_type.upper()} user: {e}")
+
+    ttk.Button(scrollable_frame, text="Save", command=save_new_user).grid(column=0, row=row, padx=10, pady=10,
+                                                                          columnspan=2)
+
+
+
+# Initialize the main window
+root = tk.Tk()
+root.title("PDF Generator & User Data Updater")
+root.geometry("1000x800")
+
+# Define custom fonts for icons
+icon_font = Font(family='Helvetica', size=12, weight='bold')
+
+# Create and place widgets
+ttk.Label(root, text="Select User:").grid(column=0, row=0, padx=10, pady=10, sticky="w")
+user_combobox = ttk.Combobox(root, state="readonly")
+user_combobox.grid(column=1, row=0, padx=10, pady=10, columnspan=2, sticky="ew")
+user_combobox.bind("<<ComboboxSelected>>", sync_selection)
+
+ttk.Label(root, text="Select PDF File:").grid(column=0, row=1, padx=10, pady=10, sticky="w")
+pdf_combobox = ttk.Combobox(root, state="readonly")
+pdf_combobox.grid(column=1, row=1, padx=10, pady=10, columnspan=2, sticky="ew")
+pdf_combobox['values'] = load_pdfs()
+
+generate_button = ttk.Button(root, text="Generate PDF", command=generate_pdf)
+generate_button.grid(column=1, row=2, padx=10, pady=10, sticky="ew")
+
+update_button = ttk.Button(root, text="Update User", command=update_user)
+update_button.grid(column=2, row=2, padx=10, pady=10, sticky="ew")
+
+add_nie_tie_button = ttk.Button(root, text="Add NIE/TIE User", command=lambda: open_add_user_popup("nie_tie"))
+add_nie_tie_button.grid(column=0, row=2, padx=10, pady=10, sticky="ew")
+
+add_empadron_button = ttk.Button(root, text="Add Empadron Data", command=lambda: open_add_user_popup("empadron"))
+add_empadron_button.grid(column=1, row=3, padx=10, pady=10, sticky="ew")
+
+ttk.Label(root, text="Search:").grid(column=0, row=4, padx=10, pady=10, sticky="w")
+search_entry = ttk.Entry(root)
+search_entry.grid(column=1, row=4, padx=10, pady=10, columnspan=2, sticky="ew")
+search_entry.bind("<KeyRelease>", search_users)
+
+# Frame for search results and selected users
+results_frame = ttk.Frame(root)
+results_frame.grid(column=0, row=5, columnspan=3, padx=10, pady=10, sticky="nsew")
+
+search_results_listbox = tk.Listbox(results_frame, height=10, width=80)
+search_results_listbox.grid(column=0, row=0, padx=10, pady=10, sticky="nsew")
+search_results_listbox.bind("<<ListboxSelect>>", select_user)
+
+# Selected users section
+ttk.Label(results_frame, text="Selected users for generation:").grid(column=0, row=1, padx=10, pady=10, sticky="w")
+
+selected_users_frame = ttk.Frame(results_frame)
+selected_users_frame.grid(column=0, row=2, padx=10, pady=10, sticky="ew")
+
+selected_users_listbox = tk.Listbox(selected_users_frame, height=4, width=80)
+selected_users_listbox.grid(column=0, row=0, columnspan=2, padx=10, pady=10, sticky="nsew")
+
+add_to_list_button = ttk.Button(selected_users_frame, text="+", command=add_user_to_list, width=2)
+add_to_list_button.grid(column=0, row=1, padx=10, pady=10, sticky="ew")
+
+remove_from_list_button = ttk.Button(selected_users_frame, text="-", command=remove_user_from_list, width=2)
+remove_from_list_button.grid(column=1, row=1, padx=10, pady=10, sticky="ew")
+
+remove_user_button = ttk.Button(root, text="Remove User", command=remove_user)
+remove_user_button.grid(column=0, row=3, padx=10, pady=10, sticky="ew")
+
+# Create a canvas and a scrollbar for the input fields
+canvas = tk.Canvas(root)
+scrollbar = ttk.Scrollbar(root, orient="vertical", command=canvas.yview)
+scrollable_frame = ttk.Frame(canvas)
+
+scrollable_frame.bind(
+    "<Configure>",
+    lambda e: canvas.configure(
+        scrollregion=canvas.bbox("all")
+    )
+)
+
+canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+canvas.configure(yscrollcommand=scrollbar.set)
+
+# Add mouse scrolling functionality
+def _on_mouse_wheel(event):
+    canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+canvas.bind_all("<MouseWheel>", _on_mouse_wheel)
+
+# Place the canvas and scrollbar on the main window
+canvas.grid(column=0, row=6, columnspan=3, padx=10, pady=10, sticky="nsew")
+scrollbar.grid(column=3, row=6, sticky="ns")
+
+# Make the grid expand to fill the available space
+root.grid_rowconfigure(6, weight=1)
+root.grid_columnconfigure(1, weight=1)
+
+# Fetch users data automatically when the application starts
+fetch_users_thread()
+
+# Start the main event loop
+root.mainloop()
+
+
+________________________________________________________________________________
+
+Path: ./modules/pdf_filler.py
+import time
+import os
+import uuid
+
+import fitz  # PyMuPDF
+import sys
+
+
+def check_street(spain_address):
+    street_type = spain_address
+    address = spain_address
+    if "calle" in street_type.lower():
+        street_type = "Calle (street)"
+        address = address.lower().replace("calle", "")
+    elif "avenida" in street_type.lower():
+        street_type = "Avenida (avenue)"
+        address = address.lower().replace("avenida", "")
+    elif "plaza" in street_type.lower():
+        street_type = "Plaza (plaza)"
+        address = address.lower().replace("plaza", "")
+    elif "carretera" in street_type.lower():
+        street_type = "Carretera (road)"
+        address = address.lower().replace("carretera", "")
+    elif "paseo" in street_type.lower():
+        street_type = "Paseo (promenade)"
+        address = address.lower().replace("paseo", "")
+
+    return street_type, address
+
+
+def pdf_filler_11(data_to_fill, additional_users):
+    # Function to fill data for 11-Formulario_larga_duracixn.pdf
+    data = {}
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    print(data_to_fill)
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    if data_to_fill["gender"] == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = True
+
+    # Family status
+    family_status_map = {
+        "single": 'field_14',
+        "married": 'field_15',
+        "widowed": 'field_16',
+        "divorced": 'field_17',
+        "separated": 'field_18'
+    }
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+    family_status_field = family_status_map.get(data_to_fill["family_status"])
+    if family_status_field:
+        data[family_status_field] = True
+
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_58'] = birth_dates[0]
+    data['field_57'] = birth_dates[1]
+    data['field_10'] = birth_dates[2]
+    data['field_11'] = data_to_fill.get('city_of_birth', '')
+    data['field_12'] = data_to_fill.get('country_of_birth', '')
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    print(data)
+
+    return data, checkboxes
+
+
+def pdf_filler_15(data_to_fill, additional_users):
+    # Function to fill data for 15-Formulario_NIE_y_certificados.pdf
+    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
+    data = {}
+    checkboxes = ["field_9", "field_8", "field_15", "field_16", "field_17", "field_18", "field_19"]
+
+    if data_to_fill["gender"] == "female":
+        data['field_9'] = True
+    else:
+        data['field_8'] = False
+    if data_to_fill["family_status"] == "single":
+        data['field_15'] = True
+
+    elif data_to_fill["family_status"] == "married":
+        data['field_16'] = True
+
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_17'] = True
+
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_18'] = True
+
+    elif data_to_fill["family_status"] == "separated":
+        data['field_19'] = True
+
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_4'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_5'] = surnames[1]
+    data['field_6'] = data_to_fill.get('name', '')
+    data['field_10'] = birth_dates[0]
+    data['field_57'] = birth_dates[1]
+    data['field_11'] = birth_dates[2]
+    data['field_12'] = data_to_fill.get('city_of_birth', '')
+    data['field_13'] = data_to_fill.get('country_of_birth', '')
+    data['field_14'] = data_to_fill.get('nationality', '')
+    data['field_20'] = data_to_fill.get('full_name_of_father', '')
+    data['field_21'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_35'] = data_to_fill.get('legal_representative_id', '')
+    data['field_31'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_17(data_to_fill, additional_users):
+    # Function to fill data for 17-Formulario_TIE.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+
+    if data_to_fill["gender"] == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = False
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0]
+    data['field_57'] = birth_dates[1]
+    data['field_10'] = birth_dates[2]
+    data['field_12'] = data_to_fill.get('city_of_birth', '')
+    data['field_11'] = data_to_fill.get('country_of_birth', '')
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_18(data_to_fill, additional_users):
+    # Function to fill data for 18-Certificado_residencia_comunitaria.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+
+    if data_to_fill["gender"] == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = True
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0]
+    data['field_57'] = birth_dates[1]
+    data['field_10'] = birth_dates[2]
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_23(data_to_fill, additional_users):
+    # Function to fill data for 23-Formulario_TIE_RU.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+
+    if data_to_fill["gender"] == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = False
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0]
+    data['field_57'] = birth_dates[1]
+    data['field_10'] = birth_dates[2]
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def pdf_filler_19(data_to_fill, additional_users):
+    # Function to fill data for 19-Tarjeta_familiar_comunitario.pdf
+    data = {}
+    checkboxes = ["field_14", "field_15", "field_16", "field_17", "field_18", "field_8", "field_7"]
+
+    if data_to_fill["gender"] == "female":
+        data['field_8'] = True
+    else:
+        data['field_7'] = False
+    if data_to_fill["family_status"] == "single":
+        data['field_14'] = True
+
+    elif data_to_fill["family_status"] == "married":
+        data['field_15'] = True
+
+    elif data_to_fill["family_status"] == "widowed":
+        data['field_16'] = True
+
+    elif data_to_fill["family_status"] == "divorced":
+        data['field_17'] = True
+
+    elif data_to_fill["family_status"] == "separated":
+        data['field_18'] = True
+
+    nie_numbers = data_to_fill.get('nie', ' - - ').split("-")
+    surnames = data_to_fill.get('surname', '   ').split(" ")
+    birth_dates = data_to_fill.get('birth_date', ' - - ').split("-")
+    data['field_0'] = data_to_fill.get('passport_number', '')
+    data['field_1'] = nie_numbers[0]
+    data['field_2'] = nie_numbers[1]
+    data['field_3'] = nie_numbers[2]
+    data['field_21'] = surnames[0]
+    if len(surnames) > 1:
+        data['field_4'] = surnames[1]
+    data['field_5'] = data_to_fill.get('name', '')
+    data['field_9'] = birth_dates[0]
+    data['field_72'] = birth_dates[1]
+    data['field_10'] = birth_dates[2]
+    data['field_13'] = data_to_fill.get('nationality', '')
+    data['field_19'] = data_to_fill.get('full_name_of_father', '')
+    data['field_20'] = data_to_fill.get('full_name_of_mother', '')
+    data['field_22'] = data_to_fill.get('spain_address', '')
+    data['field_23'] = data_to_fill.get('house_name', '')
+    data['field_24'] = data_to_fill.get('apt_number', '')  # TODO piso is not provided
+    data['field_25'] = data_to_fill.get('city', '')
+    data['field_26'] = data_to_fill.get('zip_code', '')
+    data['field_27'] = data_to_fill.get('province', '')
+    data['field_28'] = data_to_fill.get('mobile_phone', '')
+    data['field_29'] = data_to_fill.get('email', '')
+    data['field_30'] = data_to_fill.get('legal_representative_name', '')
+    data['field_31'] = data_to_fill.get('legal_representative_id', '')
+    data['field_32'] = data_to_fill.get('legal_representative_relation', '')
+    return data, checkboxes
+
+
+def convert_to_pdf_form_data_empadron(additional_users):
+    pass
+
+
+def pdf_filler_hoja_padronal(data_to_fill, additional_users):
+    # Function to fill data for Hoja_Padronal.pdf
+    print(additional_users)
+    if not additional_users:
+        data, checkboxes = convert_to_pdf_form_data(data_to_fill)
+    else:
+        print("--------")
+        print(additional_users)
+        data, checkboxes = convert_to_pdf_form_data_empadron(additional_users)
+
+    return data, checkboxes
+
+
+def pdf_filler_NIE_TIE(data_to_fill, additional_users):
+    # Function to fill data for Data Sheet for NIE_TIE - gottalovespain.pdf
+    data = {
+        'field_0': data_to_fill.get('name'),
+        'field_1': data_to_fill.get('surname', ''),
+        "id": data_to_fill.get("id", ""),
+    }
+    print(data_to_fill.get("id", ""))
+    return data, []
+
+
+def pdf_filler_empadronamiento(data_to_fill, additional_users=None):
+    print(additional_users)
+    if not additional_users:
+        # Function to fill data for Empadronamiento Form - gottalovespain.pdf
+        street_type, address = check_street(data_to_fill.get('spain_address', ''))
+
+        data = {
+            'Text1': address,
+            'Choice2': street_type,
+            "id": data_to_fill.get("id", ""),
+            'Text3': data_to_fill.get('zip_code', ''),
+            'Text4': data_to_fill.get('province', ''),
+            'Text6': data_to_fill.get('apt_number', ''),
+            'Text89': data_to_fill.get('name', ''),
+            'Text92': data_to_fill.get('surname', ''),
+            'Text94': data_to_fill.get('nie', ''),
+            'Text95': data_to_fill.get('city_of_birth', ''),
+            'Text96': data_to_fill.get('country_of_birth', ''),
+
+        }
+
+        print(data_to_fill.get("id", ""))
+    else:
+        print("--------")
+        print(additional_users)
+        data = {}
+        pass
+        #TODO
+    return data, []
+
+
+pdf_filler_docs_es_ext = {
+    "11-Formulario_larga_duracixn.pdf": pdf_filler_11,
+    "15-Formulario_NIE_y_certificados.pdf": pdf_filler_15,
+    "17-Formulario_TIE.pdf": pdf_filler_17,
+    "18-Certificado_residencia_comunitaria.pdf": pdf_filler_18,
+    "19-Tarjeta_familiar_comunitario.pdf": pdf_filler_19,
+    "23-Formulario_TIE_RU.pdf": pdf_filler_23,
+    "Hoja_Padronal.pdf": pdf_filler_hoja_padronal,
+    "Data Sheet for NIE_TIE - gottalovespain.pdf": pdf_filler_NIE_TIE,
+    "Empadronamiento Form - gottalovespain.pdf": pdf_filler_empadronamiento
+}
+
+
+def convert_to_pdf_form_data(db_data):
+    birth_date = db_data.get('birth_date')
+    if birth_date:
+        birth_spanish_time_format = str(time.strftime('%d/%m/%Y', time.strptime(birth_date, '%Y-%m-%d')))
+    else:
+        birth_spanish_time_format = None
+    names = db_data.get('name').split(" ")
+    print(names)
+    pdf_data_for_filling = {
+        'untitled1': db_data.get('street_type', ""),
+        'untitled2': db_data.get('street_name', ""),
+        'untitled3': db_data.get('house_name', ""),
+        'untitled4': db_data.get('building_letter', ""),
+        'untitled5': db_data.get('apt_number', ""),
+        'untitled6': db_data.get('building_portal', ""),
+        'untitled8': str(db_data.get('building_floor', "")),
+        'untitled9': str(db_data.get('building_door_number', "")),
+        'untitled10': True,
+        'untitled12': db_data.get('surname', ""),
+        'untitled13': names[0],
+        'untitled17': birth_spanish_time_format,
+        'untitled18': db_data.get('city_of_birth', ""),
+        'untitled19': db_data.get('country_of_birth', ""),
+        'untitled20': db_data.get('nationality', ""),
+        'untitled24': db_data.get('id_number', ""),
+        'untitled25': db_data.get('study_level', ""),
+        'untitled26': db_data.get('mobile_phone', ""),
+        'untitled27': db_data.get('email', ""),
+        'untitled33': db_data.get('prev_province_spain', ""),
+        'untitled34': db_data.get('prev_country', ""),
+        'untitled105': db_data.get('landlord_name', ""),
+        'untitled106': db_data.get('landlord_id', ""),
+        'untitled107': str(db_data.get('people_sum_involved', "")),
+    }
+    if len(names) > 1:
+        pdf_data_for_filling['untitled14'] = names[1]
+
+    # id type
+    if db_data.get("nie"):
+        pdf_data_for_filling['untitled23'] = True
+    elif db_data.get("dni"):
+        pdf_data_for_filling['untitled21'] = True
+    elif db_data.get("passport_number"):
+        pdf_data_for_filling['untitled22'] = True
+    # gender
+    if db_data.get('gender', "") == 'male':
+        pdf_data_for_filling['untitled15'] = True
+    else:
+        pdf_data_for_filling['untitled16'] = True
+    # case type
+    """TODO
+    if db_data.get('desired_service', "") == 'change residency':
+        pdf_data_for_filling['untitled28'] = True
+    elif db_data.get('desired_service', "") == 'omission':
+        pdf_data_for_filling['untitled29'] = True
+    elif db_data.get('desired_service', "") == 'birth':
+        pdf_data_for_filling['untitled30'] = True
+    elif db_data.get('desired_service', "") == 'change address':
+        pdf_data_for_filling['untitled31'] = True
+    elif db_data.get('desired_service', "") == 'change personal data':
+        pdf_data_for_filling['untitled32'] = True
+    """
+    checkboxes = ["untitled28", "untitled29", "untitled30", "untitled31", "untitled32", "untitled23", "untitled21",
+                  "untitled22", "untitled15", "untitled16"]
+
+    return pdf_data_for_filling, checkboxes
+
+
+def get_executable_dir():
+    """ Get the directory of the executable, if running as an executable """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def rename_pdf_fiedl_in_order(pdf_path):
+    doc = fitz.open(pdf_path)
+    new_field_name = "field_"
+    for page in doc:
+        for index, field in enumerate(page.widgets()):
+            field.field_name = new_field_name + str(index)
+            field.update()
+    # add renamed keyword to the saved pdf
+    pdf_path = pdf_path.replace(".pdf", "")
+    pdf_path = pdf_path.replace("pdfs_to_fill", "tmp_pdfs")
+    pdf_path += "fixed.pdf"
+    doc.save(pdf_path)
+    doc.close()
+
+
+def fill_pdf(pdf_path, db_data, additional_users=None):
+    pdf_name = os.path.basename(pdf_path)
+    print(f"pdf name {pdf_name} pdf path{pdf_path}")
+    if pdf_name in pdf_filler_docs_es_ext.keys():
+        pdf_data_for_filling, checkboxes = pdf_filler_docs_es_ext[pdf_name](db_data, additional_users)
+    else:
+        raise ValueError(f"No PDF filler function found for {pdf_name}")
+    field_index = 0
+
+    doc = fitz.open(pdf_path)
+
+    print(f"pdf data for filling {pdf_data_for_filling}")
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        for widget in page.widgets():
+            if "Hoja" not in pdf_path and "Empadronamiento" not in pdf_path:
+                widget.field_name = f"field_{field_index}"
+            field_index += 1
+            widget.update()
+            field_name = widget.field_name
+            if field_name in pdf_data_for_filling:
+                field_value = pdf_data_for_filling[field_name]
+                if field_name in checkboxes and widget.field_type == 2:
+                    print(f"Checkbox {field_name} set to {field_value} in field type {widget.field_type}")
+
+                    widget.field_value = field_value
+                else:
+                    widget.field_value = str(field_value)
+                widget.update()
+            else:
+                widget.reset()
+                widget.update()
+                if widget.field_type == 7:
+                    widget.field_value = " "
+                    widget.update()
+
+    output_dir = os.path.join(get_executable_dir(), 'output')
+    os.makedirs(output_dir, exist_ok=True)
+
+    if pdf_data_for_filling.get("id") and "gottalovespain" in pdf_path:
+        id_text = f"ID: {pdf_data_for_filling.get('id')}"
+        # Define position for the text annotation
+        page = doc.load_page(0)  # Load the first page
+        rect = fitz.Rect(10, 10, 100, 30)  # Define a specific location for easier retrieval
+        # Add free text annotation with a white color to make it effectively invisible
+        page.add_freetext_annot(rect, id_text, fontsize=12)
+    else:
+        if len(doc) > 1:
+            doc.delete_page(1)
+    output_path = os.path.join(output_dir,
+                               f"Filled_{pdf_name.replace('.pdf', '')}_{str(uuid.uuid4())}.pdf")
+
+    doc.save(output_path)
+
+    print(f"document saved to {output_path} with id {read_pdf_custom_id(output_path)}")
+    print(f"PDF filled and saved to {output_path}")
+
+
+def add_additional_users(data, additional_users):
+    base_pdf_index = 1
+    fields_per_user = 23  # Number of fields per additional user
+    data['untitled107'] = str(len(additional_users) + 1).replace("(", "").replace(",)", "")
+
+    checked = False
+    for user_index, user in enumerate(additional_users):
+        if user_index >= 4:
+            break  # Ensure we do not add more than 4 users
+        current_base_index = base_pdf_index + user_index * fields_per_user
+        print(current_base_index)
+        print("______________")
+        birth_spanish_time_format = str(time.strftime('%d/%m/%Y', time.strptime(user["birth_date"], '%Y-%m-%d')))
+        if not checked:
+            if user.get("dni"):
+                data['untitled48.field13'] = user.get("dni")
+            if user.get("nie"):
+                data['untitled48.field13'] = user.get("nie")
+            if user.get("passport_number"):
+                data['untitled48.field13'] = user.get("passport_number")
+            data['untitled48.field15'] = user.get('mobile_phone'),
+            checked = True
+        else:
+            data[f'field{current_base_index + 14}'] = user.get("mobile_phone")
+            if user.get("dni"):
+                data[f'field{current_base_index + 12}'] = user.get("dni")
+            if user.get("nie"):
+                data[f'field{current_base_index + 12}'] = user.get("nie")
+            if user.get("passport_number"):
+                data[f'field{current_base_index + 12}'] = user.get("passport_number")
+        if " " in user.get("name"):
+            user["second_name"] = user.get("name").split(" ")[1]
+            user["name"] = user.get("name").split(" ")[0]
+        data[f'field{current_base_index}'] = user.get("surname")
+        data[f'field{current_base_index + 1}'] = user.get("name")
+        data[f'field{current_base_index + 2}'] = user.get("second_name")
+        data[f'field{current_base_index + 5}'] = birth_spanish_time_format
+        data[f'field{current_base_index + 6}'] = user.get("city_of_birth")
+        data[f'field{current_base_index + 7}'] = user.get("country_of_birth")
+        data[f'field{current_base_index + 8}'] = user.get("nationality")
+        data[f'field{current_base_index + 15}'] = user.get('email')
+
+        data[f'field{current_base_index + 13}'] = user.get("study_level")
+        data[f'field{current_base_index + 21}'] = user.get("prev_province_spain")
+        data[f'field{current_base_index + 22}'] = user.get("prev_country")
+
+        if user.get("nie"):
+            data[f'field{current_base_index + 11}'] = True
+        elif user.get("dni"):
+            data[f'field{current_base_index + 9}'] = True
+        elif user.get("passport_number"):
+            data[f'field{current_base_index + 10}'] = True
+        # gender
+        if user.get('gender') == 'male':
+            data[f'field{current_base_index + 3}'] = True
+        else:
+            data[f'field{current_base_index + 4}'] = True
+        # case type
+        """
+        if user.get('document_case_type'] == 'change residency':
+            data[f'field{current_base_index + 16}'] = True
+        elif user.get('document_case_type'] == 'omission':
+            data[f'field{current_base_index + 17}'] = True
+        elif user.get('document_case_type'] == 'birth':
+            data[f'field{current_base_index + 18}'] = True
+        elif user.get('document_case_type'] == 'change address':
+            data[f'field{current_base_index + 19}'] = True
+        elif user.get('document_case_type'] == 'change personal data':
+            data[f'field{current_base_index + 20}'] = True
+        """
+    return data
+
+
+def read_pdf_custom_id(pdf_path):
+    doc = fitz.open(pdf_path)
+    custom_id = None
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        for annot in page.annots():
+
+            text = annot.info["content"]
+            if text.startswith("ID: "):
+                custom_id = text[4:]
+                break
+        if custom_id:
+            break
+    print(f"Custom ID: {custom_id}")
+    return custom_id
+
+________________________________________________________________________________
+
+Path: ./modules/utils.py
+import os
+import sys
+
+
+def get_resource_path(relative_path):
+    """ Get the absolute path to a resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+def load_pdfs():
+    pdf_dir = get_resource_path("pdf")
+    pdf_files = [f for f in os.listdir(str(pdf_dir)) if f.endswith('.pdf')]
+    return pdf_files
+
+________________________________________________________________________________
+
+Path: ./modules/supabase_client.py
+import json
+import os
+import sys
+
+from supabase import create_client, Client
+
+
+"""
+url: str = os.environ.get(key="SUPABASE_URL", default="https://hetrvidiwvkrxaqeozgc.supabase.co")
+key: str = os.environ.get(key="SUPABASE_KEY",
+                          default="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhldHJ2aWRpd3ZrcnhhcWVvemdjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTM1NTE5NTUsImV4cCI6MjAyOTEyNzk1NX0.dpUKNQ65qsZaiRlrKoj9jiWhvdzhuFFxBP1ENGd_jGs")
+
+"""
+def load_config():
+    if hasattr(sys, '_MEIPASS'):
+        # If running in a PyInstaller bundle, get the config file from the bundle
+        config_path = os.path.join(sys._MEIPASS, 'config.json')
+    else:
+        # If running in a normal environment, get the config file from the current directory
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+
+    with open(config_path) as config_file:
+        return json.load(config_file)
+
+
+config = load_config()
+
+url: str = config.get("SUPABASE_URL")
+key: str = config.get("SUPABASE_KEY")
+
+
+supabase_client: Client = create_client(url, key)
+
+# Define the table fields
+nie_tie_fields = {'id', 'name', 'surname', 'city_of_birth', 'country_of_birth', 'family_status', 'gender',
+                  'full_name_of_father', 'full_name_of_mother', 'spain_address', 'house_name', 'apt_number', 'city',
+                  'zip_code', 'province', 'legal_representative_name', 'legal_representative_id',
+                  'legal_representative_relation', 'consent_communication_electronically', 'apply_digital_certificate',
+                  'no_consent_data_consultation', 'comments', 'Initial'}
+initial_fields = {'id', 'name', 'surname', 'birth_date', 'nationality', 'additional_nationality', 'passport_number',
+                  'id_number', 'nie', 'mobile_phone', 'email', 'city', 'province', 'desired_service',
+                  'not_available_appointments', 'appointment_deadline', 'appointment_location', 'referral_source',
+                  'comments'}
+"""
+def insert_data(data):
+    response = supabase_client.table('addresses').insert(data).execute()
+    if response:
+        print("Data inserted successfully.")
+    else:
+        print(f"Failed to insert data: {response.json()}")
+
+
+def fetch_data():
+    response = supabase_client.table('addresses').select('*').execute()
+    if response:
+        data = response.json()
+        return json.loads(data)
+    else:
+        print(f"Failed to fetch data: {response.json()}")
+
+
+def update_data(selected_user, data):
+    response = supabase_client.table('addresses').update(data).eq("id", selected_user.get('id')).execute()
+    if response:
+        print("Data updated successfully.")
+    else:
+        print(f"Failed to update data: {response.json()}")
+
+
+def remove_data(user_id):
+    response = supabase_client.table('addresses').delete().eq("id", user_id).execute()
+    if response:
+        print("Data removed successfully.")
+    else:
+        print(f"Failed to remove data: {response.json()}")
+
+"""
+
+
+def fetch_enum_values(table, column):
+    response = supabase_client.table(table).select(column).execute()
+    if response.data:
+        return list(set(item[column] for item in response.data if item[column] is not None))
+    return []
+
+
+# Fetch data from both tables
+def fetch_data_nie_tie_initial():
+    data_sheet_nie_tie = supabase_client.table("data_sheet_nie_tie").select("*").execute()
+    initial_data_request = supabase_client.table("initial_data_request").select("*").execute()
+    merged_data = merge_data(data_sheet_nie_tie.data, initial_data_request.data)
+    return merged_data
+
+
+# Merge data based on the foreign key initial_id using a join-like approach
+def merge_data(data_sheet_nie_tie, initial_data_request):
+    # Create a dictionary for quick lookup of initial data by id
+    initial_data_dict = {item['id']: item for item in initial_data_request}
+
+    merged_data = []
+    for nie_tie in data_sheet_nie_tie:
+        initial_id = nie_tie.get('initial_id')
+        if initial_id and initial_id in initial_data_dict:
+            merged_entry = {**nie_tie, **initial_data_dict[initial_id]}
+        else:
+            merged_entry = {**nie_tie}
+        merged_data.append(merged_entry)
+
+    return merged_data
+
+
+# Update data in the appropriate tables
+def update_data(id_value, updates):
+    # Separate updates for each table
+    nie_tie_updates = {k: v for k, v in updates.items() if k in nie_tie_fields}
+    initial_updates = {k: v for k, v in updates.items() if k in initial_fields}
+
+    # Perform updates
+    if nie_tie_updates:
+        supabase_client.table("data_sheet_nie_tie").update(nie_tie_updates).eq("id", id_value).execute()
+    if initial_updates:
+        initial_id = updates.get('initial_id')
+        if initial_id:
+            supabase_client.table("initial_data_request").update(initial_updates).eq("id", initial_id).execute()
+
+
+# Insert data into the appropriate tables
+def insert_data(data):
+    # Separate data for each table
+    nie_tie_data = {k: v for k, v in data.items() if k in nie_tie_fields}
+    initial_data = {k: v for k, v in data.items() if k in initial_fields}
+
+    # Perform inserts
+    if initial_data:
+        response = supabase_client.table("initial_data_request").insert(initial_data).execute()
+        if response:
+            print("Data inserted successfully into initial_data_request.")
+            # Get the inserted initial_data id and use it as initial_id for nie_tie_data
+            initial_data_id = response.data[0]['id']
+            nie_tie_data['initial_id'] = initial_data_id
+        else:
+            print(f"Failed to insert data into initial_data_request: {response.json()}")
+    if nie_tie_data:
+        response = supabase_client.table("data_sheet_nie_tie").insert(nie_tie_data).execute()
+        if response:
+            print("Data inserted successfully into data_sheet_nie_tie.")
+        else:
+            print(f"Failed to insert data into data_sheet_nie_tie: {response.json()}")
+
+
+# Remove user from both tables
+def remove_user_from_db(id_value):
+    supabase_client.table("data_sheet_nie_tie").delete().eq("id", id_value).execute()
+    supabase_client.table("initial_data_request").delete().eq("id", id_value).execute()
+
+
+# Main function to run the script
+def example():
+    insert_data({"name": "John", "surname": "Doe", "email": "2D5wK@example.com"})
+    merged_data = fetch_data_nie_tie_initial()
+    print("Merged Data: ", merged_data)
+
+
+def fetch_empadron_data():
+    empadron_data = supabase_client.table("empadron_data").select("*").execute()
+    return empadron_data.data
+
+
+def insert_empadron_data(data):
+    response = supabase_client.table("empadron_data").insert(data).execute()
+    if response:
+        print("Data inserted successfully into empadron_data.")
+    else:
+        print(f"Failed to insert data into empadron_data: {response.json()}")
+
+
+"""exmaple data 
+Merged Data:  [{'id': 110, 'name': 'Botond', 'surname': 'Berde', 'city_of_birth': 'London', 'country_of_birth': 'Mongolia', 'family_status': 'married', 'gender': 'female', 'full_name_of_father': 'father222 name exmpale', 'full_name_of_mother': 'Mother name exmpale22', 'spain_address': 'calle tio', 'house_name': '11', 'apt_number': '24', 'city': 'Las Palmas de Gran', 'zip_code': '3451', 'province': 'Canary Islands - Las Palmas', 'legal_representative_name': 'Lie Hawkinss', 'legal_representative_id': '123454', 'legal_representative_relation': 'father', 'consent_communication_electronically': True, 'apply_digital_certificate': True, 'no_consent_data_consultation': True, 'comments': None, 'first_names': 'Botond', 'surnames': 'Berde', 'birth_date': '1982-05-11', 'nationality': 'Uruguay', 'additional_nationality': 'Rumania', 'passport_number': 'O74KQQ5As', 'id_number': 'GT8664TWEs', 'nie': '(293)756-5215', 'mobile_phone': '+34345678987', 'email': 'Califorsasnia@exmaple.com', 'desired_service': 'Majom', 'not_available_appointments': '2023-10-27', 'appointment_deadline': '2025-03-29', 'appointment_location': 'Nearby cities', 'referral_source': 'Facebook'}, {'id': 112, 'name': 'Botond2', 'surname': 'Berde', 'city_of_birth': 'London', 'country_of_birth': 'Mongolia', 'family_status': 'married', 'gender': 'female', 'full_name_of_father': 'father222 name exmpale', 'full_name_of_mother': 'Mother name exmpale22', 'spain_address': 'calle tio', 'house_name': '11', 'apt_number': '24', 'city': 'Madrid/Ba', 'zip_code': '3451', 'province': 'Canarias', 'legal_representative_name': 'Lie Hawkinss', 'legal_representative_id': '123454', 'legal_representative_relation': 'father', 'consent_communication_electronically': True, 'apply_digital_certificate': True, 'no_consent_data_consultation': True, 'comments': None, 'nationality': '', 'surnames': '', 'passport_number': '', 'first_names': '', 'mobile_phone': '', 'email': '', 'not_available_appointments': '', 'appointment_location': '', 'desired_service': '', 'referral_source': '', 'additional_nationality': '', 'appointment_deadline': '', 'nie': '', 'id_number': '', 'birth_date': ''}, {'legal_representative_id': '', 'family_status': '', 'country_of_birth': '', 'full_name_of_father': '', 'no_consent_data_consultation': '', 'full_name_of_mother': '', 'zip_code': '', 'house_name': '', 'surname': '', 'legal_representative_name': '', 'legal_representative_relation': '', 'consent_communication_electronically': '', 'city_of_birth': '', 'gender': '', 'apply_digital_certificate': '', 'apt_number': '', 'name': '', 'spain_address': '', 'id': 111, 'first_names': 'Botond1', 'surnames': 'Berde', 'birth_date': '1982-05-11', 'nationality': 'Uruguay', 'additional_nationality': 'Rumania', 'passport_number': 'O74KQQ5As', 'id_number': 'GT8664TWEs', 'nie': '(293)756-5215', 'mobile_phone': '+34345678987', 'email': 'Califorsasnia@exmaple.com', 'city': 'Las Palmas de Gran', 'province': 'Canary Islands - Las Palmas', 'desired_service': 'Majom', 'not_available_appointments': '2023-10-27', 'appointment_deadline': '2025-03-29', 'appointment_location': 'Nearby cities', 'referral_source': 'Facebook', 'comments': None}]
+
+"""
+
+________________________________________________________________________________
+

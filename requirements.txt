@@ -29,3 +29,4 @@ supafunc==0.4.5
 tkcalendar==1.6.1
 typing_extensions==4.11.0
 websockets==12.0
+tkinter
