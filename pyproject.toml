@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pdf-auto-filler-hoja-padronal"
+version = "0.1.0"
+description = ""
+authors = ["botondberde <botond_berde@icloud.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+supabase = "^2.7.3"
+pymupdf = "^1.24.9"
+pillow = "^10.4.0"
+matplotlib = "^3.9.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
