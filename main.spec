@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('config.json', '.'), ('pdf', 'pdf')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
